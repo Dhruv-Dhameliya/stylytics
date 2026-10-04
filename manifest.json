@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "Stylytics",
+  "version": "2.2",
+  "description": "Audits any web page's design, SEO, accessibility, and performance — fonts, colors, structured data, and more.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "downloads",
+    "sidePanel",
+    "tabs",
+    "storage",
+    "unlimitedStorage",
+    "windows"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "action": {
+    "default_title": "Click to open panel",
+    "default_icon": {
+      "16": "icon/icon16.png",
+      "48": "icon/icon48.png",
+      "128": "icon/icon128.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "stylytics.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icon/icon16.png",
+    "48": "icon/icon48.png",
+    "128": "icon/icon128.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline' https://*; font-src 'self' data: https://*;"
+  }
+}

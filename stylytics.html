@@ -1,0 +1,1416 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stylytics</title>
+  <link rel="stylesheet" href="stylytics.css">
+</head>
+
+<body>
+  <header class="app-header">
+    <div class="app-header-left">
+      <div class="app-logo">
+        <img src="icon/icon48.png" alt="Stylytics Logo">
+      </div>
+      <div class="app-title-group">
+        <h1>Stylytics</h1>
+      </div>
+    </div>
+    <div class="app-header-right">
+      <button id="settings-header-btn" class="header-icon-btn" title="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+          stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path
+            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z">
+          </path>
+        </svg>
+      </button>
+      <button id="refresh-btn" class="primary-btn" title="Scan / refresh extracted data">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-11.1l5.25 5.53" />
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="container">
+    <div id="loading" class="loading">
+      <div class="skeleton-grid">
+        <div class="skeleton-tile">
+          <div class="skeleton-tile-icon"></div>
+          <div class="skeleton-tile-bar"></div>
+          <div class="skeleton-tile-bar skeleton-tile-bar-sm"></div>
+        </div>
+        <div class="skeleton-tile">
+          <div class="skeleton-tile-icon"></div>
+          <div class="skeleton-tile-bar"></div>
+          <div class="skeleton-tile-bar skeleton-tile-bar-sm"></div>
+        </div>
+        <div class="skeleton-tile">
+          <div class="skeleton-tile-icon"></div>
+          <div class="skeleton-tile-bar"></div>
+          <div class="skeleton-tile-bar skeleton-tile-bar-sm"></div>
+        </div>
+        <div class="skeleton-tile">
+          <div class="skeleton-tile-icon"></div>
+          <div class="skeleton-tile-bar"></div>
+          <div class="skeleton-tile-bar skeleton-tile-bar-sm"></div>
+        </div>
+        <div class="skeleton-tile">
+          <div class="skeleton-tile-icon"></div>
+          <div class="skeleton-tile-bar"></div>
+          <div class="skeleton-tile-bar skeleton-tile-bar-sm"></div>
+        </div>
+        <div class="skeleton-tile">
+          <div class="skeleton-tile-icon"></div>
+          <div class="skeleton-tile-bar"></div>
+          <div class="skeleton-tile-bar skeleton-tile-bar-sm"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="content" class="content hidden">
+
+      <div id="tab-panel-overview" class="tab-panel">
+        <div class="dashboard-content">
+          <div class="dashboard-header">
+            <h2 class="dashboard-title">Overview</h2>
+            <p class="dashboard-subtitle" id="dashboard-subtitle">Snapshot for this page</p>
+          </div>
+          <div class="dashboard-hero" id="dashboard-hero"></div>
+          <div class="dashboard-rings" id="dashboard-rings"></div>
+          <div class="dashboard-quick-stats" id="dashboard-quick-stats"></div>
+          <div class="dashboard-section-title">Issue Breakdown</div>
+          <div class="dashboard-breakdown" id="dashboard-breakdown"></div>
+          <div id="consistency-popover" class="dashboard-popover hidden"></div>
+          <label class="dashboard-toggle-row" for="exclude-header-footer-toggle">
+            <span class="dashboard-toggle-text">
+              <span class="dashboard-toggle-label">Exclude header &amp; footer</span>
+              <span class="dashboard-toggle-desc">Scan only the main page content for the SEO audit</span>
+            </span>
+            <span class="switch">
+              <input type="checkbox" id="exclude-header-footer-toggle">
+              <span class="switch-track"></span>
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <div id="tab-panel-seo" class="tab-panel hidden">
+        <div class="dashboard-content">
+
+          <div class="segmented hidden" id="seo-group-toggle">
+            <button class="tag active" data-group="meta">Meta</button>
+            <button class="tag" data-group="performance">Performance</button>
+          </div>
+          <div class="settings-tab-divider hidden" id="seo-group-toggle-divider" style="margin-bottom: 10px;"></div>
+
+          <div class="seo-group-panel" id="seo-group-meta" data-group="meta">
+            <div class="dashboard-section-title" style="margin-top: 0;">Meta</div>
+            <div class="segmented segmented-wrap hidden" id="seo-meta-pills"></div>
+            <div class="section-board" id="seo-meta-board">
+
+              <div class="section-card" data-tab="meta" style="--tile-accent: var(--c-meta);">
+                <button class="section-card-header">
+                  <span class="tile-icon-wrap">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                      stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="16" x2="12" y2="12"></line>
+                      <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                    </svg>
+                  </span>
+                  <span class="tile-label">Meta Insights</span>
+                  <svg class="card-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </button>
+                <div class="section-card-body">
+                  <div class="section-card-body-inner">
+                    <div class="section-card-body-content">
+                      <div class="section-title" style="margin-top: 0;">Search Preview</div>
+                      <div class="segmented" id="serp-device-toggle" style="margin-bottom: 8px;">
+                        <button class="tag active" data-device="desktop">Desktop</button>
+                        <button class="tag" data-device="mobile">Mobile</button>
+                      </div>
+                      <div id="serp-preview" class="meta-container serp-preview" style="margin-bottom: 12px;"></div>
+                      <div id="meta-info" class="meta-container"></div>
+                      <div class="section-title">Site Files</div>
+                      <div id="site-files-info" class="meta-container"></div>
+                      <div class="section-title">Trust Signals</div>
+                      <div id="trust-signals-list" class="outline-container"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="section-card" data-tab="media-contact" style="--tile-accent: var(--c-contact);">
+                <button class="section-card-header">
+                  <span class="tile-icon-wrap">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                      stroke-linejoin="round">
+                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="9" cy="7" r="4"></circle>
+                      <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                      <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                  </span>
+                  <span class="tile-label">Media Contact</span>
+                  <span class="tile-count hidden"></span>
+                  <svg class="card-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </button>
+                <div class="section-card-body">
+                  <div class="section-card-body-inner">
+                    <div class="section-card-body-content">
+                      <div id="media-contact-info" class="meta-container"></div>
+                      <div class="section-title">Social Links</div>
+                      <ul id="media-contact-social-list" class="list"></ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="section-card" data-tab="structured-data" style="--tile-accent: var(--c-structured-data);">
+                <button class="section-card-header">
+                  <span class="tile-icon-wrap">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                      stroke-linejoin="round">
+                      <polyline points="16 18 22 12 16 6"></polyline>
+                      <polyline points="8 6 2 12 8 18"></polyline>
+                    </svg>
+                  </span>
+                  <span class="tile-label">Structured Data</span>
+                  <span class="tile-count hidden"></span>
+                  <svg class="card-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </button>
+                <div class="section-card-body">
+                  <div class="section-card-body-inner">
+                    <div class="section-card-body-content">
+                      <div class="section-title" style="margin-top: 0;">Detected Types</div>
+                      <div id="structured-data-types" class="tags"></div>
+                      <div class="section-title">
+                        <span>Schema Blocks</span>
+                        <span style="display: flex; gap: 6px; align-items: center;">
+                          <div class="segmented" id="structured-data-view-toggle" style="margin-bottom: 0;">
+                            <button class="tag active" data-view="tree">Tree</button>
+                            <button class="tag" data-view="raw">Raw</button>
+                          </div>
+                          <button id="copy-structured-data-btn" class="mini-action"
+                            title="Copy all structured data blocks">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                              stroke-linecap="round" stroke-linejoin="round">
+                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                            Copy
+                          </button>
+                        </span>
+                      </div>
+                      <div id="structured-data-tree"></div>
+                      <div id="structured-data-blocks" class="hidden"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="section-card" data-tab="seo-score" style="--tile-accent: var(--c-seo-score);">
+                <button class="section-card-header">
+                  <span class="tile-icon-wrap">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                      stroke-linejoin="round">
+                      <path d="M9 11l3 3L22 4"></path>
+                      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                    </svg>
+                  </span>
+                  <span class="tile-label">SEO Score</span>
+                  <span class="tile-count hidden"></span>
+                  <svg class="card-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </button>
+                <div class="section-card-body">
+                  <div class="section-card-body-inner">
+                    <div class="section-card-body-content">
+                      <div id="seo-score-display" class="score-display"></div>
+                      <div class="section-title" style="margin-top: 0;">Checklist</div>
+                      <div id="seo-checklist" class="outline-container"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="section-card" data-tab="social" style="--tile-accent: var(--c-social);">
+                <button class="section-card-header">
+                  <span class="tile-icon-wrap">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                      stroke-linejoin="round">
+                      <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                      <line x1="8" y1="21" x2="16" y2="21"></line>
+                      <line x1="12" y1="17" x2="12" y2="21"></line>
+                    </svg>
+                  </span>
+                  <span class="tile-label">Social Preview</span>
+                  <svg class="card-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </button>
+                <div class="section-card-body">
+                  <div class="section-card-body-inner">
+                    <div class="section-card-body-content">
+                      <div class="segmented" id="social-platform-toggle">
+                        <button class="tag active" data-platform="facebook">Facebook</button>
+                        <button class="tag" data-platform="twitter">Twitter / X</button>
+                        <button class="tag" data-platform="linkedin">LinkedIn</button>
+                      </div>
+                      <div id="social-preview-container"></div>
+                      <div id="social-image-warning" class="empty-state hidden"
+                        style="text-align: left; padding: 10px 0 0 0;"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="section-card" data-tab="outline" style="--tile-accent: var(--c-outline);">
+                <button class="section-card-header">
+                  <span class="tile-icon-wrap">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                      stroke-linejoin="round">
+                      <line x1="8" y1="6" x2="21" y2="6"></line>
+                      <line x1="8" y1="12" x2="21" y2="12"></line>
+                      <line x1="8" y1="18" x2="21" y2="18"></line>
+                      <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                      <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                      <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                    </svg>
+                  </span>
+                  <span class="tile-label">Outline</span>
+                  <span class="tile-count hidden"></span>
+                  <svg class="card-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </button>
+                <div class="section-card-body">
+                  <div class="section-card-body-inner">
+                    <div class="section-card-body-content">
+                      <div id="heading-counts" class="heading-counts">
+                        <span class="tile-icon-wrap">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="8" y1="6" x2="21" y2="6"></line>
+                            <line x1="8" y1="12" x2="21" y2="12"></line>
+                            <line x1="8" y1="18" x2="21" y2="18"></line>
+                            <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                            <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                            <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                          </svg>
+                        </span>
+                        <div class="heading-counts-grid">
+                          <div class="heading-count-item"><span class="heading-count-label">H1</span><span
+                              class="heading-count-value" data-level="1"></span></div>
+                          <div class="heading-count-item"><span class="heading-count-label">H2</span><span
+                              class="heading-count-value" data-level="2"></span></div>
+                          <div class="heading-count-item"><span class="heading-count-label">H3</span><span
+                              class="heading-count-value" data-level="3"></span></div>
+                          <div class="heading-count-item"><span class="heading-count-label">H4</span><span
+                              class="heading-count-value" data-level="4"></span></div>
+                          <div class="heading-count-item"><span class="heading-count-label">H5</span><span
+                              class="heading-count-value" data-level="5"></span></div>
+                          <div class="heading-count-item"><span class="heading-count-label">H6</span><span
+                              class="heading-count-value" data-level="6"></span></div>
+                        </div>
+                      </div>
+                      <div class="section-title" style="margin-top: 0;">
+                        <span style="display: flex; align-items: center; gap: 6px;">
+                          Headings
+                          <span id="reading-time-badge" class="tile-count hidden"></span>
+                        </span>
+                        <span style="display: flex; gap: 6px;">
+                          <button id="copy-toc-btn" class="mini-action"
+                            title="Copy as a table of contents with anchor links">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                              stroke-linecap="round" stroke-linejoin="round">
+                              <line x1="8" y1="6" x2="21" y2="6"></line>
+                              <line x1="8" y1="12" x2="21" y2="12"></line>
+                              <line x1="8" y1="18" x2="21" y2="18"></line>
+                              <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                              <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                              <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                            </svg>
+                            TOC
+                          </button>
+                          <button id="copy-outline-btn" class="mini-action" title="Copy formatted outline">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                              stroke-linecap="round" stroke-linejoin="round">
+                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                            Copy
+                          </button>
+                        </span>
+                      </div>
+                      <div id="article-outline" class="outline-container"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="section-card" data-tab="accessibility" style="--tile-accent: var(--c-accessibility);">
+                <button class="section-card-header">
+                  <span class="tile-icon-wrap">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                      stroke-linejoin="round">
+                      <circle cx="12" cy="4" r="1.5"></circle>
+                      <path d="M4 8l8 2 8-2M12 10v5m0 0l-3 7m3-7l3 7"></path>
+                    </svg>
+                  </span>
+                  <span class="tile-label">Accessibility</span>
+                  <span class="tile-count hidden"></span>
+                  <svg class="card-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </button>
+                <div class="section-card-body">
+                  <div class="section-card-body-inner">
+                    <div class="section-card-body-content">
+                      <div class="section-title" style="margin-top: 0;">Overview</div>
+                      <div id="a11y-overview" class="meta-container"></div>
+                      <div class="section-title">Images Missing Alt Text</div>
+                      <div id="a11y-missing-alt" class="outline-container"></div>
+                      <div class="section-title">Form Fields Missing Labels</div>
+                      <div id="a11y-missing-labels" class="outline-container"></div>
+                      <div class="section-title">Heading Hierarchy</div>
+                      <div id="a11y-heading-issues" class="outline-container"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+
+          <div class="seo-group-panel hidden" id="seo-group-performance" data-group="performance">
+            <div class="dashboard-section-title" style="margin-top: 0;">Performance</div>
+            <div class="segmented segmented-wrap hidden" id="seo-performance-pills"></div>
+            <div class="section-board" id="seo-performance-board">
+
+              <div class="section-card" data-tab="backlinks" style="--tile-accent: var(--c-backlinks);">
+                <button class="section-card-header">
+                  <span class="tile-icon-wrap">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                      stroke-linejoin="round">
+                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                    </svg>
+                  </span>
+                  <span class="tile-label">Backlinks</span>
+                  <span class="tile-count hidden"></span>
+                  <svg class="card-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </button>
+                <div class="section-card-body">
+                  <div class="section-card-body-inner">
+                    <div class="section-card-body-content">
+                      <div id="backlink-stats" class="meta-container" style="margin-bottom: 12px;"></div>
+                      <div class="section-title" style="margin-top: 0;">
+                        <span>Broken Link Check</span>
+                        <span style="display: flex; gap: 6px;">
+                          <button id="clear-broken-links-btn" class="mini-action hidden" title="Clear results">
+                            Clear
+                          </button>
+                          <button id="check-broken-links-btn" class="mini-action"
+                            title="Fetch each link and check its response status">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                              stroke-linecap="round" stroke-linejoin="round">
+                              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                            </svg>
+                            Run Check
+                          </button>
+                        </span>
+                      </div>
+                      <div id="broken-link-results" class="outline-container hidden" style="margin-bottom: 12px;"></div>
+                      <div class="segmented">
+                        <button id="btn-dofollow" class="tag active">Do-Follow</button>
+                        <button id="btn-nofollow" class="tag">No-Follow</button>
+                        <button id="btn-internal" class="tag">Internal</button>
+                        <button id="btn-external" class="tag">External</button>
+                      </div>
+                      <div id="links-container" class="hidden">
+                        <input type="text" id="link-search" class="search-input"
+                          placeholder="Search anchor text or URL..." style="margin-bottom: 8px;">
+                        <div id="link-results-header" class="section-title"
+                          style="text-transform:none; justify-content: center;"></div>
+                        <ul id="link-list" class="list" style="max-height: 260px; overflow-y: auto;"></ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="section-card" data-tab="tech-stack" style="--tile-accent: var(--c-tech-stack);">
+                <button class="section-card-header">
+                  <span class="tile-icon-wrap">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                      stroke-linejoin="round">
+                      <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
+                      <rect x="9" y="9" width="6" height="6"></rect>
+                      <line x1="9" y1="1" x2="9" y2="4"></line>
+                      <line x1="15" y1="1" x2="15" y2="4"></line>
+                      <line x1="9" y1="20" x2="9" y2="23"></line>
+                      <line x1="15" y1="20" x2="15" y2="23"></line>
+                      <line x1="20" y1="9" x2="23" y2="9"></line>
+                      <line x1="20" y1="14" x2="23" y2="14"></line>
+                      <line x1="1" y1="9" x2="4" y2="9"></line>
+                      <line x1="1" y1="14" x2="4" y2="14"></line>
+                    </svg>
+                  </span>
+                  <span class="tile-label">Tech Stack</span>
+                  <span class="tile-count hidden"></span>
+                  <svg class="card-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </button>
+                <div class="section-card-body">
+                  <div class="section-card-body-inner">
+                    <div class="section-card-body-content">
+                      <div class="section-title" style="margin-top: 0;">
+                        <span>Detected Technologies</span>
+                        <button id="export-tech-stack-btn" class="mini-action"
+                          title="Export the detected tech stack as a JSON file">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                          </svg>
+                          Export
+                        </button>
+                      </div>
+                      <div id="tech-stack-categories"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="section-card" data-tab="performance" style="--tile-accent: var(--c-performance);">
+                <button class="section-card-header">
+                  <span class="tile-icon-wrap">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                      stroke-linejoin="round">
+                      <polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polyline>
+                    </svg>
+                  </span>
+                  <span class="tile-label">Performance &amp; CWV</span>
+                  <svg class="card-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </button>
+                <div class="section-card-body">
+                  <div class="section-card-body-inner">
+                    <div class="section-card-body-content">
+                      <div class="section-title" style="margin-top: 0;">
+                        <span>Core Web Vitals</span>
+                        <span id="cwv-overall-status" class="meta-label"></span>
+                      </div>
+                      <div id="cwv-grid" class="cwv-grid"></div>
+                      <button id="cwv-psi-link" class="footer-action primary" style="margin-top: 12px;">
+                        Check CWV Score in PageSpeedInsights
+                      </button>
+
+                      <div class="section-title">Page Load Stats</div>
+                      <div id="performance-stats" class="meta-container"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="section-card" data-tab="llm-visibility" style="--tile-accent: var(--c-llm-visibility);">
+                <button class="section-card-header">
+                  <span class="tile-icon-wrap">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                      stroke-linejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                      <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                  </span>
+                  <span class="tile-label">LLM Visibility</span>
+                  <span class="tile-count hidden"></span>
+                  <svg class="card-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </button>
+                <div class="section-card-body">
+                  <div class="section-card-body-inner">
+                    <div class="section-card-body-content">
+                      <div id="llm-visibility-score-display" class="score-display"></div>
+                      <div class="section-title" style="margin-top: 0;">Checklist</div>
+                      <div id="llm-visibility-checklist" class="outline-container"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="section-card" data-tab="dark-patterns" style="--tile-accent: var(--c-dark-patterns);">
+                <button class="section-card-header">
+                  <span class="tile-icon-wrap">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                      stroke-linejoin="round">
+                      <path d="M12 9v4"></path>
+                      <path
+                        d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L14.71 3.86a2 2 0 0 0-3.42 0Z">
+                      </path>
+                      <path d="M12 17h.01"></path>
+                    </svg>
+                  </span>
+                  <span class="tile-label">Dark Patterns</span>
+                  <span class="tile-count hidden"></span>
+                  <svg class="card-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </button>
+                <div class="section-card-body">
+                  <div class="section-card-body-inner">
+                    <div class="section-card-body-content">
+                      <p class="inspect-hint" style="margin: 0 0 10px 0;">Best-effort heuristics for manipulative UX
+                        patterns — a hit is worth a human look, not proof of intent.</p>
+                      <div id="dark-pattern-score-display" class="score-display"></div>
+                      <div class="section-title" style="margin-top: 0;">Checklist</div>
+                      <div id="dark-pattern-checklist" class="outline-container"></div>
+                      <div id="dp-precheck-group" class="hidden">
+                        <div class="section-title">Pre-Checked Opt-In Checkboxes</div>
+                        <div id="dp-precheck-list" class="outline-container"></div>
+                      </div>
+                      <div id="dp-shaming-group" class="hidden">
+                        <div class="section-title">Confirm-Shaming Copy</div>
+                        <div id="dp-shaming-list" class="outline-container"></div>
+                      </div>
+                      <div id="dp-scarcity-group" class="hidden">
+                        <div class="section-title">Fake Urgency / Scarcity</div>
+                        <div id="dp-scarcity-list" class="outline-container"></div>
+                      </div>
+                      <div id="dp-hidden-links-group" class="hidden">
+                        <div class="section-title">Hidden or Obscured Cancel/Unsubscribe Links</div>
+                        <div id="dp-hidden-links-list" class="outline-container"></div>
+                      </div>
+                      <div id="dp-confusing-optout-group" class="hidden">
+                        <div class="section-title">Confusing Opt-Out Phrasing</div>
+                        <div id="dp-confusing-optout-list" class="outline-container"></div>
+                      </div>
+                      <div id="dp-free-trial-group" class="hidden">
+                        <div class="section-title">Undisclosed Free-Trial Terms</div>
+                        <div id="dp-free-trial-list" class="outline-container"></div>
+                      </div>
+                      <div id="dp-disguised-ads-group" class="hidden">
+                        <div class="section-title">Disguised Advertising</div>
+                        <div id="dp-disguised-ads-list" class="outline-container"></div>
+                      </div>
+                      <div id="dp-consent-disparity-group" class="hidden">
+                        <div class="section-title">Consent Button Styling Disparity</div>
+                        <div id="dp-consent-disparity-list" class="outline-container"></div>
+                      </div>
+                      <div id="dp-all-clear" class="empty-state hidden">No dark patterns detected on this page</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+
+          <div style="display: flex; gap: 6px; margin-top: 6px;">
+            <button id="export-seo-report-btn" class="footer-action" style="margin-top: 0;"
+              title="Export a complete SEO audit report (score, checklist, structured data, backlinks, performance)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <path d="M9 11l3 3L22 4"></path>
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+              </svg>
+              SEO Report
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-panel-tools" class="tab-panel hidden">
+
+        <div id="vibe-strip" class="vibe-strip">
+          <span id="vibe-text" class="vibe-text"></span>
+          <span id="consistency-badge" class="consistency-badge"
+            title="Design consistency score: fewer distinct colors/fonts and more consistent spacing scores higher"></span>
+        </div>
+
+        <div class="global-search-wrap">
+          <input type="text" id="global-search-input" class="search-input"
+            placeholder="Search fonts, colors, links, headings…" autocomplete="off">
+          <div id="global-search-results" class="global-search-results hidden"></div>
+        </div>
+
+        <div class="section-board" id="section-board">
+
+          <div class="section-card" data-tab="inspect" style="--tile-accent: var(--c-outline);">
+            <button class="section-card-header" id="inspect-btn" title="Click-to-inspect an element on the page">
+              <span class="tile-icon-wrap">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                  stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="16"></line>
+                  <line x1="8" y1="12" x2="16" y2="12"></line>
+                </svg>
+              </span>
+              <span class="tile-label">Inspect</span>
+            </button>
+          </div>
+
+          <div class="section-card" data-tab="typography" style="--tile-accent: var(--c-typography);">
+            <button class="section-card-header">
+              <span class="tile-icon-wrap">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                  stroke-linejoin="round">
+                  <polyline points="4 7 4 4 20 4 20 7"></polyline>
+                  <line x1="9" y1="20" x2="15" y2="20"></line>
+                  <line x1="12" y1="4" x2="12" y2="20"></line>
+                </svg>
+              </span>
+              <span class="tile-label">Typography</span>
+              <svg class="card-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            <div class="section-card-body">
+              <div class="section-card-body-inner">
+                <div class="section-card-body-content">
+                  <input type="text" id="font-preview-input" class="search-input" placeholder="Type to preview font..."
+                    style="margin-bottom: 12px;">
+                  <div class="section-title">
+                    <span>Font Families</span>
+                    <button id="copy-fonts-btn" class="mini-action" title="Copy all font families">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                      </svg>
+                      Copy
+                    </button>
+                  </div>
+                  <ul id="font-families" class="list"></ul>
+                  <div class="section-title">Font Sizes</div>
+                  <div id="font-sizes" class="tags"></div>
+                  <div class="section-title">Live Font Preview</div>
+                  <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 8px;">
+                    <select id="theme-preview-font-select" class="mini-action"
+                      style="flex: 1; cursor: pointer;"></select>
+                    <input type="text" id="theme-preview-font-target" class="mini-action" style="flex: 1; cursor: text;"
+                      list="theme-preview-font-presets" autocomplete="off" placeholder="Type any font name…">
+                    <datalist id="theme-preview-font-presets">
+                      <option value="Arial"></option>
+                      <option value="Georgia"></option>
+                      <option value="Times New Roman"></option>
+                      <option value="Verdana"></option>
+                      <option value="Trebuchet MS"></option>
+                      <option value="Courier New"></option>
+                      <option value="Inter"></option>
+                      <option value="Roboto"></option>
+                      <option value="Poppins"></option>
+                      <option value="Montserrat"></option>
+                      <option value="Open Sans"></option>
+                      <option value="Lato"></option>
+                      <option value="Playfair Display"></option>
+                      <option value="Merriweather"></option>
+                    </datalist>
+                  </div>
+                  <div style="display: flex; gap: 6px;">
+                    <button id="theme-preview-font-apply-btn" class="footer-action" style="margin-top: 0;"
+                      title="Preview swapping this font on the live page — any font name works; Google Fonts are loaded automatically if needed (does not change the source)">Preview
+                      Font</button>
+                    <button id="theme-preview-font-reset-btn" class="footer-action"
+                      style="margin-top: 0; background: transparent; border: 1px solid var(--border-color); color: var(--text-tertiary);"
+                      title="Undo all live preview changes on the page">Reset</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-card" data-tab="colors" style="--tile-accent: var(--c-colors);">
+            <button class="section-card-header">
+              <span class="tile-icon-wrap">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                  stroke-linejoin="round">
+                  <circle cx="13.5" cy="6.5" r="0.5"></circle>
+                  <path
+                    d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.4-.3-.4-.5-.9-.5-1.4 0-1.1.9-2 2-2h2.4c2.3 0 4.1-1.8 4.1-4.1C21.5 6 17.2 2 12 2z">
+                  </path>
+                </svg>
+              </span>
+              <span class="tile-label">Colors</span>
+              <span class="tile-count hidden"></span>
+              <svg class="card-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            <div class="section-card-body">
+              <div class="section-card-body-inner">
+                <div class="section-card-body-content">
+                  <div class="segmented" id="colorblind-toggle" style="margin-bottom: 12px;"
+                    title="Also simulates this color vision type directly on the live page">
+                    <button class="tag active" data-mode="normal">Normal</button>
+                    <button class="tag" data-mode="protanopia" title="Protanopia">Prot</button>
+                    <button class="tag" data-mode="deuteranopia" title="Deuteranopia">Deut</button>
+                    <button class="tag" data-mode="tritanopia" title="Tritanopia">Trit</button>
+                    <button class="tag" data-mode="monochrome" title="Monochrome">Mono</button>
+                  </div>
+                  <div class="settings-feature-row">
+                    <span class="settings-feature-icon">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                      </svg>
+                    </span>
+                    <div class="settings-feature-text">
+                      <div class="settings-feature-title">Dark Mode Preview</div>
+                      <div class="settings-feature-desc">Preview a dark theme on the live page.</div>
+                    </div>
+                    <label class="switch">
+                      <input type="checkbox" id="dark-mode-preview-toggle">
+                      <span class="switch-track"></span>
+                    </label>
+                  </div>
+                  <div class="section-title" style="margin-top: 0;">
+                    <span>Picked Colors</span>
+                    <button id="color-picker-btn" class="mini-action" title="Pick a color from the page">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+                      </svg>
+                      Pick Color
+                    </button>
+                  </div>
+                  <div id="picked-palette" class="color-grid hidden"></div>
+                  <div class="section-title">
+                    <span>Text Colors</span>
+                    <span style="display: flex; gap: 6px; align-items: center;">
+                      <select id="color-export-format" class="mini-action" style="cursor: pointer;">
+                        <option value="css">CSS Vars</option>
+                        <option value="tailwind">Tailwind</option>
+                        <option value="scss">SCSS</option>
+                        <option value="json">JSON</option>
+                      </select>
+                      <button id="copy-colors-btn" class="mini-action" title="Copy all colors in the selected format">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                          stroke-linecap="round" stroke-linejoin="round">
+                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                        Copy
+                      </button>
+                    </span>
+                  </div>
+                  <div id="color-palette" class="color-grid"></div>
+                  <div class="section-title">Background Colors</div>
+                  <div id="bg-palette" class="color-grid"></div>
+                  <div class="section-title">Hover Colors (Text &amp; Bg)</div>
+                  <div id="hover-palette" class="color-grid" style="margin-bottom: 12px;"></div>
+                  <div id="gradients-title" class="section-title">Gradients</div>
+                  <div id="gradient-list" class="color-grid" style="margin-bottom: 12px;"></div>
+                  <div class="section-title">Color Palette Generator</div>
+                  <div id="palette-generator" class="palette-generator"></div>
+                  <div class="section-title">
+                    <span>Contrast Check</span>
+                    <span style="display: flex; gap: 6px;">
+                      <button id="clear-contrast-btn" class="mini-action hidden" title="Clear results">
+                        Clear
+                      </button>
+                      <button id="check-contrast-btn" class="mini-action"
+                        title="Check text/background color pairs against WCAG AA">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                          stroke-linecap="round" stroke-linejoin="round">
+                          <circle cx="12" cy="12" r="10"></circle>
+                          <path d="M12 2a10 10 0 0 1 0 20"></path>
+                        </svg>
+                        Run Check
+                      </button>
+                    </span>
+                  </div>
+                  <div id="contrast-results" class="outline-container hidden"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-card" data-tab="responsive" style="--tile-accent: var(--c-responsive);">
+            <button class="section-card-header">
+              <span class="tile-icon-wrap">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                  stroke-linejoin="round">
+                  <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+                  <line x1="12" y1="18" x2="12.01" y2="18"></line>
+                </svg>
+              </span>
+              <span class="tile-label">Responsive Simulator</span>
+              <svg class="card-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            <div class="section-card-body">
+              <div class="section-card-body-inner">
+                <div class="section-card-body-content">
+                  <div class="section-title" style="margin-top: 0;">Device Presets</div>
+                  <div id="device-grid" class="device-grid"></div>
+                  <div class="section-title">Custom Size</div>
+                  <div style="display: flex; gap: 6px; align-items: center;">
+                    <input type="number" id="custom-device-width" class="search-input" placeholder="Width" min="200"
+                      max="3000" value="390" style="flex: 1;">
+                    <span style="color: var(--text-tertiary); font-size: 12px;">&times;</span>
+                    <input type="number" id="custom-device-height" class="search-input" placeholder="Height" min="200"
+                      max="3000" value="844" style="flex: 1;">
+                  </div>
+                  <button id="open-custom-device-btn" class="footer-action" style="margin-top: 8px;">Open Custom
+                    Size</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-card" data-tab="tokens" style="--tile-accent: var(--c-tokens);">
+            <button class="section-card-header">
+              <span class="tile-icon-wrap">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                  stroke-linejoin="round">
+                  <rect x="3" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="14" width="7" height="7"></rect>
+                  <rect x="3" y="14" width="7" height="7"></rect>
+                </svg>
+              </span>
+              <span class="tile-label">Design Tokens</span>
+              <svg class="card-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            <div class="section-card-body">
+              <div class="section-card-body-inner">
+                <div class="section-card-body-content">
+                  <div class="section-title" style="margin-top: 0;">Grid Overlay</div>
+                  <div class="segmented" id="grid-overlay-toggle"
+                    title="Overlays a fixed grid on the live page to check spacing/alignment">
+                    <button class="tag active" data-mode="none">Off</button>
+                    <button class="tag" data-mode="grid">8px Grid</button>
+                    <button class="tag" data-mode="baseline">Baseline</button>
+                  </div>
+                  <div id="grid-overlay-size-row" class="hidden"
+                    style="display: flex; gap: 6px; align-items: center; margin-bottom: 12px;">
+                    <span style="font-size: 11px; color: var(--text-tertiary);">Spacing (px)</span>
+                    <input type="number" id="grid-overlay-size-input" class="mini-action" style="width: 64px;" min="2"
+                      max="500" value="8">
+                  </div>
+                  <div class="section-title">Margins</div>
+                  <div id="tokens-margins" class="tags"></div>
+                  <div class="section-title">Paddings</div>
+                  <div id="tokens-paddings" class="tags"></div>
+                  <div class="section-title">Gaps</div>
+                  <div id="tokens-gaps" class="tags"></div>
+                  <div class="section-title">Border Radius</div>
+                  <div id="tokens-radii" class="tags"></div>
+                  <div class="section-title">Box Shadows</div>
+                  <div id="tokens-shadows" class="tags"></div>
+                  <div class="section-title">Z-Index Values</div>
+                  <div id="tokens-zindex" class="tags"></div>
+                  <div class="section-title">
+                    <span>CSS Custom Properties</span>
+                    <button id="copy-tokens-btn" class="mini-action" title="Copy custom properties as CSS">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                      </svg>
+                      Copy
+                    </button>
+                  </div>
+                  <div id="tokens-custom-props" class="outline-container"></div>
+                  <div class="section-title">Starter Kit Export</div>
+                  <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+                    <select id="starter-kit-format" class="mini-action" style="flex: 1; cursor: pointer;">
+                      <option value="tailwind">Tailwind Config</option>
+                      <option value="css">CSS Variables</option>
+                      <option value="figma">Design Tokens JSON</option>
+                    </select>
+                  </div>
+                  <button id="export-starter-kit-btn" class="footer-action" style="margin-top: 0;"
+                    title="Package the colors, fonts and spacing on this page into a ready-to-use starter kit">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                      stroke-linejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="7 10 12 15 17 10"></polyline>
+                      <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Export Starter Kit
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-card" data-tab="assets" style="--tile-accent: var(--c-assets);">
+            <button class="section-card-header">
+              <span class="tile-icon-wrap">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                  stroke-linejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                  <polyline points="21 15 16 10 5 21"></polyline>
+                </svg>
+              </span>
+              <span class="tile-label">Assets &amp; Images</span>
+              <span class="tile-count hidden"></span>
+              <svg class="card-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            <div class="section-card-body">
+              <div class="section-card-body-inner">
+                <div class="section-card-body-content">
+                  <div id="assets-toggle-container" class="segmented" style="display: none;">
+                    <button id="btn-show-logos" class="tag">Logos</button>
+                    <button id="btn-show-images" class="tag active">Images</button>
+                  </div>
+                  <button id="download-all-zip-btn" class="footer-action" style="margin-top: 0; margin-bottom: 8px;"
+                    title="Download all detected images as a single zip file">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                      stroke-linejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="7 10 12 15 17 10"></polyline>
+                      <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Download All as ZIP
+                  </button>
+                  <div id="assets-grid-logos" class="assets-grid hidden"></div>
+                  <div id="assets-grid-images" class="assets-grid hidden"></div>
+                  <div id="broken-images-title" class="section-title">Broken Images</div>
+                  <div id="broken-images-list" class="outline-container"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-card" data-tab="screenshot" style="--tile-accent: var(--c-screenshot);">
+            <button class="section-card-header">
+              <span class="tile-icon-wrap">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                  stroke-linejoin="round">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                  <circle cx="12" cy="13" r="4"></circle>
+                </svg>
+              </span>
+              <span class="tile-label">Screenshot &amp; Annotate</span>
+              <svg class="card-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            <div class="section-card-body">
+              <div class="section-card-body-inner">
+                <div class="section-card-body-content">
+                  <div style="display: flex; gap: 6px;">
+                    <button id="capture-visible-btn" class="footer-action" style="margin-top: 0;">Capture Visible
+                      Area</button>
+                    <button id="capture-fullpage-btn" class="footer-action" style="margin-top: 0;">Capture Full
+                      Page</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <div style="display: flex; gap: 6px; margin-top: 6px;">
+          <button id="export-style-guide-btn" class="footer-action" style="margin-top: 0;"
+            title="Export a polished, shareable design style guide (colors, fonts, spacing) — great for client handoff">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7"></rect>
+              <rect x="14" y="3" width="7" height="7"></rect>
+              <path d="M3 14h7v7H3z"></path>
+              <path d="M17.5 17.5v.01"></path>
+            </svg>
+            Style Guide
+          </button>
+        </div>
+
+      </div>
+
+      <div id="tab-panel-settings" class="tab-panel hidden">
+
+        <div class="dashboard-header settings-back-header">
+          <button id="settings-back-btn" class="settings-back-btn" title="Back">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round">
+              <line x1="19" y1="12" x2="5" y2="12"></line>
+              <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
+          </button>
+          <h2 class="dashboard-title">Settings</h2>
+        </div>
+
+        <div class="settings-flat-content">
+
+          <div class="section-title" style="margin-top: 0;">Theme</div>
+          <div class="segmented" id="theme-choice-toggle">
+            <button class="tag" id="theme-light-btn" data-theme-choice="light">Light</button>
+            <button class="tag" id="theme-dark-btn" data-theme-choice="dark">Dark</button>
+          </div>
+
+          <div class="settings-tab-divider"></div>
+
+          <div class="settings-feature-row">
+            <span class="settings-feature-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+              </svg>
+            </span>
+            <div class="settings-feature-text">
+              <div class="settings-feature-title">Continue Where You Left Off</div>
+              <div class="settings-feature-desc">Reopen the tab and section you were last viewing when you
+                return to a page. Turn off to always start on the Overview dashboard.</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="settings-restore-session-toggle" checked>
+              <span class="switch-track"></span>
+            </label>
+          </div>
+
+          <div class="settings-feature-row">
+            <span class="settings-feature-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <rect x="3" y="3" width="7" height="7"></rect>
+                <rect x="14" y="3" width="7" height="7"></rect>
+                <rect x="14" y="14" width="7" height="7"></rect>
+                <rect x="3" y="14" width="7" height="7"></rect>
+              </svg>
+            </span>
+            <div class="settings-feature-text">
+              <div class="settings-feature-title">Grid Layout</div>
+              <div class="settings-feature-desc">Arrange tiles in the Tools and SEO tabs as a compact grid
+                instead of a single-column list.</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="settings-section-grid-toggle">
+              <span class="switch-track"></span>
+            </label>
+          </div>
+
+          <div class="settings-feature-row">
+            <span class="settings-feature-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <path d="M12 2l2.5 6.5L21 11l-6.5 2.5L12 20l-2.5-6.5L3 11l6.5-2.5z"></path>
+              </svg>
+            </span>
+            <div class="settings-feature-text">
+              <div class="settings-feature-title">Modern Look (SEO Tab)</div>
+              <div class="settings-feature-desc">Show a Meta/Performance switcher above the SEO tab, each showing
+                its tools as wrapping pill tabs with only the selected one expanded, instead of the standard
+                stacked list.</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="settings-modern-look-toggle">
+              <span class="switch-track"></span>
+            </label>
+          </div>
+
+          <div class="settings-tab-divider"></div>
+
+          <div class="section-title">Tools (show, hide, reorder)</div>
+          <div id="settings-section-list"></div>
+
+          <div class="section-title">Meta (show, hide, reorder)</div>
+          <div id="settings-seo-meta-list"></div>
+
+          <div class="section-title">Performance (show, hide, reorder)</div>
+          <div id="settings-seo-performance-list"></div>
+
+          <div class="settings-tab-divider"></div>
+
+          <div class="section-title">Default Expanded Section</div>
+          <select id="settings-default-section" class="search-input"></select>
+
+          <div class="section-title">Max Items Per Grid</div>
+          <input type="number" id="settings-max-items" class="search-input" min="8" max="200" step="4">
+
+          <div class="section-title">Asset View</div>
+          <div class="settings-feature-row">
+            <span class="settings-feature-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                <polyline points="21 15 16 10 5 21"></polyline>
+              </svg>
+            </span>
+            <div class="settings-feature-text">
+              <div class="settings-feature-title">List View for Assets</div>
+              <div class="settings-feature-desc">Show detected images and logos as a list instead of a grid.
+              </div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="settings-asset-list-toggle">
+              <span class="switch-track"></span>
+            </label>
+          </div>
+
+        </div>
+
+        <div class="settings-save-bar">
+          <button id="settings-save-btn" class="footer-action primary">Save Settings</button>
+          <button id="settings-reset-btn" class="footer-text-link">Reset to Defaults</button>
+        </div>
+
+      </div>
+
+      <div id="tab-panel-info" class="tab-panel hidden">
+        <div class="dashboard-header">
+          <h2 class="dashboard-title">Tips</h2>
+        </div>
+
+        <input type="text" id="info-search-input" class="search-input" style="margin-bottom: 10px;"
+          placeholder="Search features or terms…" autocomplete="off">
+
+        <div class="segmented" id="info-mode-toggle">
+          <button class="tag active" data-mode="howto">How to Use</button>
+          <button class="tag" data-mode="glossary">Glossary</button>
+        </div>
+
+        <div id="info-category-nav" class="info-category-nav"></div>
+
+        <div id="info-howto-content"></div>
+        <div id="info-glossary-content" class="hidden"></div>
+        <div id="info-empty-state" class="empty-state hidden">No matches for that search</div>
+      </div>
+
+    </div>
+  </div>
+
+  <nav id="bottom-nav" class="bottom-nav">
+    <button class="bottom-nav-btn active" data-bottom-tab="overview" title="Overview (Alt+1)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+        stroke-linejoin="round">
+        <path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path>
+        <path d="M22 12A10 10 0 0 0 12 2v10z"></path>
+      </svg>
+      <span>Overview</span>
+    </button>
+    <button class="bottom-nav-btn" data-bottom-tab="seo" title="SEO (Alt+2)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+        stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      <span>SEO</span>
+    </button>
+    <button class="bottom-nav-btn" data-bottom-tab="tools" title="Tools (Alt+3)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+        stroke-linejoin="round">
+        <path
+          d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z">
+        </path>
+      </svg>
+      <span>Tools</span>
+    </button>
+    <button class="bottom-nav-btn" data-bottom-tab="info" title="Tips (Alt+4)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+        stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="16" x2="12" y2="12"></line>
+        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+      </svg>
+      <span>Tips</span>
+    </button>
+  </nav>
+
+  <div class="toast-stack" id="toast-stack"></div>
+
+  <div id="screenshot-overlay" class="settings-overlay hidden">
+    <div class="settings-header">
+      <button id="screenshot-back-btn" class="icon-btn" title="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+          stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+      </button>
+      <h2>Screenshot &amp; Annotate</h2>
+    </div>
+    <div class="settings-body" style="padding: 12px;">
+      <div id="screenshot-empty" class="inspect-empty">
+        <div class="inspect-empty-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+            <circle cx="12" cy="13" r="4"></circle>
+          </svg>
+        </div>
+        <p class="inspect-empty-title">Capturing…</p>
+        <p class="inspect-hint" id="screenshot-status-text">Please wait</p>
+      </div>
+      <div id="screenshot-editor" class="hidden">
+        <div class="screenshot-toolbar">
+          <button id="screenshot-edit-btn" class="mini-action"
+            title="Open the full editor in a new tab — more room and more tools">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round">
+              <path d="M15 3h6v6"></path>
+              <path d="M10 14 21 3"></path>
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+            </svg>
+            Edit
+          </button>
+        </div>
+        <div id="screenshot-canvas-wrap" class="screenshot-canvas-wrap">
+          <canvas id="screenshot-canvas"></canvas>
+        </div>
+        <div style="display: flex; gap: 6px; margin-top: 10px;">
+          <select id="screenshot-download-format" class="mini-action" style="flex: 1; cursor: pointer;">
+            <option value="png">PNG</option>
+            <option value="jpg">JPG</option>
+            <option value="pdf">PDF</option>
+          </select>
+          <button id="download-screenshot-btn" class="footer-action primary" style="margin-top: 0; flex: 2;">
+            Download</button>
+          <button id="copy-screenshot-btn" class="footer-action" style="margin-top: 0; flex: 1;"
+            title="Copy screenshot to clipboard">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            Copy
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="inspect-overlay" class="settings-overlay hidden">
+    <div class="settings-header">
+      <button id="inspect-back-btn" class="icon-btn" title="Close inspector">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+          stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+      </button>
+      <h2>Element Inspector</h2>
+    </div>
+    <div class="settings-body" style="padding-top: 12px;">
+
+      <div class="segmented" id="inspect-mode-toggle">
+        <button class="tag active" data-inspect-mode="structure">Structure</button>
+        <button class="tag" data-inspect-mode="click">Click to Inspect</button>
+      </div>
+
+      <div id="inspect-structure-panel">
+        <div class="segmented" id="tree-depth-toggle">
+          <button class="tag active" data-tree-mode="simplified"
+            title="Semantic landmarks only — header, nav, main, sections, headings">Simplified</button>
+          <button class="tag" data-tree-mode="full" title="Every element, like a browser DevTools Elements panel">Full
+            DOM</button>
+        </div>
+        <input type="text" id="tree-search-input" class="search-input" placeholder="Search by tag, class, or #id..."
+          style="margin-bottom: 8px;">
+        <div id="dom-tree-container"></div>
+        <div id="tree-selected-detail"></div>
+      </div>
+
+      <div id="inspect-click-panel" class="hidden">
+        <div id="inspect-empty" class="inspect-empty">
+          <div class="inspect-empty-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <circle cx="12" cy="12" r="4"></circle>
+              <line x1="12" y1="2" x2="12" y2="6"></line>
+              <line x1="12" y1="18" x2="12" y2="22"></line>
+              <line x1="2" y1="12" x2="6" y2="12"></line>
+              <line x1="18" y1="12" x2="22" y2="12"></line>
+            </svg>
+          </div>
+          <p class="inspect-empty-title">Click an element to inspect</p>
+          <p class="inspect-hint">Press Esc anytime to cancel</p>
+          <button id="inspect-start-btn" class="footer-action">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+              stroke-linejoin="round" style="width: 14px; height: 14px;">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="16"></line>
+              <line x1="8" y1="12" x2="16" y2="12"></line>
+            </svg>
+            Start Inspecting
+          </button>
+        </div>
+        <div id="inspect-history-container" class="hidden">
+          <div style="display: flex; gap: 6px; margin-bottom: 10px;">
+            <button id="inspect-again-btn" class="footer-action" style="margin-top: 0;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+                stroke-linejoin="round" style="width: 14px; height: 14px;">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="16"></line>
+                <line x1="8" y1="12" x2="16" y2="12"></line>
+              </svg>
+              Inspect Element
+            </button>
+            <button id="inspect-clear-btn" class="footer-action"
+              style="margin-top: 0; background: transparent; border: 1px solid var(--border-color); color: var(--text-tertiary);">
+              Clear History
+            </button>
+          </div>
+          <div id="inspect-history-board" class="section-board"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="clear-confirm-overlay" class="settings-overlay confirm-overlay hidden">
+    <div class="confirm-dialog">
+      <div>
+        <p class="confirm-dialog-title">Clear History?</p>
+        <p class="confirm-dialog-desc">Are you sure you want to clear your element history?</p>
+      </div>
+      <div class="confirm-dialog-actions">
+        <button id="clear-cancel-btn" class="footer-action">Cancel</button>
+        <button id="clear-confirm-btn" class="footer-action danger">Clear</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="screenshot-shared.js"></script>
+  <script src="stylytics.js"></script>
+</body>
+
+</html>
