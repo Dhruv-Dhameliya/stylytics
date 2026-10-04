@@ -106,8 +106,7 @@ Stylytic/
 ├── content_extractor.js   Injected into the web page: collects data and runs live page tools
 ├── screenshot-shared.js   Shared canvas/annotation/PDF/export helpers (used by panel and editor)
 ├── editor.html / .css / .js   Full-tab screenshot editor
-├── icon/                  Extension icons (16, 48, 128 px)
-└── .claude/settings.json  Local Claude Code permission settings (not part of the extension)
+└── icon/                  Extension icons (16, 48, 128 px)
 ```
 
 ---
