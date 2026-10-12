@@ -1,4 +1,5 @@
-/* screenshot editor */
+/* screenshot editor — same look as the side panel: ink on paper, squircle corners.
+   Loaded after stylytics.css, which provides the tokens and base components. */
 
 html,
 body {
@@ -6,7 +7,7 @@ body {
   margin: 0;
   background: var(--bg-color);
   color: var(--text-primary);
-  font-family: 'Jost', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-ui);
   overflow: hidden;
 }
 
@@ -15,133 +16,229 @@ body {
   flex-direction: column;
 }
 
+/* ---------- top bar ---------- */
 .editor-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  background: linear-gradient(160deg, var(--header-bg), #24141a 160%);
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  padding: 8px 14px;
+  background: var(--chrome-bg);
+  color: var(--chrome-text);
   flex-shrink: 0;
 }
 
-.editor-header .tile-icon-wrap {
-  width: 26px;
-  height: 26px;
-  color: var(--c-screenshot);
-  flex-shrink: 0;
+.editor-brand {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 10px;
 }
 
-.editor-header .tile-icon-wrap svg {
-  width: 20px;
-  height: 20px;
-}
-
-.editor-header h1 {
-  font-size: 14px;
-  font-weight: 700;
-  color: #ffffff;
+.editor-brand .brand-mark {
   margin: 0;
+}
+
+.editor-brand h1 {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
   white-space: nowrap;
+}
+
+.editor-header-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .editor-header-spacer {
   flex: 1;
 }
 
-.editor-header-divider {
-  width: 1px;
-  align-self: stretch;
-  background: #38383e;
-  margin: 0 2px;
+.editor-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--chrome-dim);
 }
 
-.editor-header-select {
+.editor-ibtn {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--chrome-line);
+  border-radius: 50%;
   background: transparent;
-  border-color: #38383e;
-  color: var(--header-text-dim);
+  color: var(--chrome-text);
+  cursor: pointer;
 }
 
-.editor-header-select:hover {
-  background: #2a2a30;
-  border-color: #46464e;
-  color: #ffffff;
+.editor-ibtn svg {
+  width: 16px;
+  height: 16px;
 }
 
-.editor-header .footer-action {
-  padding: 7px 12px;
-  font-size: 12px;
+.editor-ibtn:hover {
+  background: var(--chrome-hover);
 }
 
-.editor-header .icon-btn:disabled {
+.editor-ibtn:disabled {
   opacity: 0.35;
   cursor: default;
   pointer-events: none;
 }
 
-.editor-toolbar {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 8px 14px;
-  background: var(--surface-color);
-  border-bottom: 1px solid var(--border-color);
-  flex-shrink: 0;
+.editor-header .segmented {
+  margin: 0;
+  background: rgba(255, 255, 255, 0.1);
 }
 
-#tool-toggle {
-  flex-wrap: wrap;
-  margin-bottom: 0;
+.editor-header .segmented .tag {
+  color: var(--chrome-dim);
+  font-size: 11.5px;
+}
+
+.editor-header .segmented .tag.active {
+  background: rgba(255, 255, 255, 0.2);
+  color: var(--chrome-text);
+  box-shadow: none;
+}
+
+#annotation-color {
+  width: 30px;
+  height: 30px;
+  padding: 3px;
+  border: 1px solid var(--chrome-line);
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.editor-select {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--chrome-line);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--chrome-text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.editor-select option {
+  color: #18181b;
+}
+
+.editor-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 13px;
+  border: 1px solid var(--chrome-line);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--chrome-text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.editor-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.editor-btn:hover {
+  background: var(--chrome-hover);
+}
+
+.editor-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+
+.editor-btn.primary:hover {
+  opacity: 0.9;
+  background: var(--accent);
+}
+
+/* ---------- tool rail ---------- */
+.editor-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.editor-rail {
+  width: 72px;
+  flex-shrink: 0;
+  padding: 10px 8px;
+  overflow-y: auto;
+  background: var(--surface-color);
+  border-right: 1px solid var(--border-color);
+}
+
+.editor-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .tool-btn {
   flex: 0 0 auto;
-  width: 32px;
-  height: 32px;
-  padding: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  padding: 7px 2px 6px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 10.5px;
+  font-weight: 500;
+  cursor: pointer;
 }
 
 .tool-btn svg {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
 }
 
-#stroke-width-toggle {
-  margin-bottom: 0;
+.tool-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
 }
 
-.editor-toolbar #annotation-color {
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  cursor: pointer;
-  background: none;
-  flex-shrink: 0;
+.tool-btn.active,
+.tool-btn.active:hover {
+  background: var(--ink);
+  color: var(--on-ink);
+  font-weight: 600;
+  border: 0;
 }
 
+/* ---------- canvas ---------- */
 .editor-canvas-area {
   flex: 1;
   overflow: auto;
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 20px;
+  padding: 24px;
+  background: color-mix(in srgb, var(--text-primary) 7%, var(--bg-color));
   scrollbar-width: thin;
   -ms-overflow-style: auto;
 }
 
-/* stylytics.css hides scrollbars globally for the side panel; this page (and only this
-   page, since editor.css is not loaded elsewhere) opts back in so a tall/wide screenshot
-   is scrollable and discoverable */
+/* stylytics.css hides scrollbars globally for the side panel; this page opts back in so a
+   tall or wide screenshot is scrollable and discoverable */
 .editor-canvas-area::-webkit-scrollbar {
   display: block;
   width: 10px;
@@ -191,12 +288,8 @@ body {
   cursor: default;
 }
 
-#crop-actions {
-  margin-bottom: 0;
-}
-
 #crop-apply-btn {
-  background: linear-gradient(135deg, var(--accent), #f97316);
+  background: var(--accent);
   color: #ffffff;
 }
 
@@ -208,11 +301,21 @@ body {
   border-radius: 3px;
   background: rgba(255, 255, 255, 0.85);
   outline: none;
-  font-family: 'Jost', sans-serif;
+  font-family: var(--font-ui);
   font-weight: 600;
   white-space: pre;
 }
 
 .hidden {
   display: none !important;
+}
+
+@media (max-width: 720px) {
+  .editor-rail {
+    width: 64px;
+  }
+
+  .tool-btn span {
+    display: none;
+  }
 }

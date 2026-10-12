@@ -205,7 +205,9 @@ function cancelPendingCrop() {
 // theme parity
 function applyStoredTheme() {
   chrome.storage.local.get(['themeOverride'], (res) => {
-    document.documentElement.setAttribute('data-theme', res.themeOverride || 'light');
+    const theme = res.themeOverride || 'light';
+    if (theme === 'system') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', theme);
   });
 }
 

@@ -19,50 +19,15 @@ let activePaletteKey = null;
 let extractGeneration = 0;
 let contentUnavailable = true;
 
-function getSkeletonLoadingHtml() {
-  const tiles = Array(6).fill(`
-    <div class="skeleton-tile">
-      <div class="skeleton-tile-icon"></div>
-      <div class="skeleton-tile-bar"></div>
-      <div class="skeleton-tile-bar skeleton-tile-bar-sm"></div>
-    </div>
-  `).join('');
-  return `<div class="skeleton-grid">${tiles}</div>`;
-}
-
-// The Settings tab's Save bar sticks just above the always-visible bottom nav rather
-// than at the raw viewport edge, so it needs that nav's real rendered height (font
-// metrics/line-height make it unsafe to hardcode).
-function syncBottomNavHeightVar() {
-  const nav = document.getElementById('bottom-nav');
-  if (!nav) return;
-  document.documentElement.style.setProperty('--bottom-nav-height', nav.offsetHeight + 'px');
-}
-
 document.addEventListener('DOMContentLoaded', () => {
-  loadSettings((settings) => {
-    applySettings(settings);
-    renderSettingsForm(settings);
-  });
-  setupSections();
-  setupTheme();
-  setupBottomNav();
-  setupSeoGroupToggle();
   setupSerpDeviceToggle();
-  syncBottomNavHeightVar();
-  window.addEventListener('load', syncBottomNavHeightVar);
-  window.addEventListener('resize', syncBottomNavHeightVar);
   setupInfoTab();
-  setupGlobalSearch();
-  setupKeyboardNav();
   setupColorblindToggle();
   setupDarkModePreviewToggle();
   setupGridOverlayToggle();
-  setupSettingsPanel();
   setupInspectPanel();
   setupResponsiveSimulator();
   setupScreenshotPanel();
-  setupExcludeHeaderFooterToggle();
 
   function extractData() {
     if (inspectModeActive) closeInspectOverlay();
@@ -110,10 +75,12 @@ document.addEventListener('DOMContentLoaded', () => {
             chrome.scripting.executeScript({
               target: { tabId: activeTab.id },
               files: ['content_extractor.js']
-            }, (results) => {
+            }, (extractResults) => {
+              if (!isCurrent()) return;
+              const proceed = (results) => {
               if (!isCurrent()) return;
               setScanning(false);
-              if (chrome.runtime.lastError || !results || !results.length || !results[0].result) {
+              if (!results || !results.length || !results[0].result) {
                 showError("Failed to extract page data. Ensure this isn't a restricted page.", "Extraction Failed");
                 return;
               }
@@ -161,25 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
               const linksContainerReset = document.getElementById('links-container');
               if (linksContainerReset) linksContainerReset.classList.add('hidden');
 
-              restoreUiState(activeTab.id, (savedState) => {
-                if (!isCurrent()) return;
-                const restoreEnabled = !currentSettings || currentSettings.restoreLastSession !== false;
-                const effectiveState = restoreEnabled ? savedState : null;
-
-                const toolsPanel = document.getElementById('tab-panel-tools');
-                if (toolsPanel) toolsPanel.classList.remove('hidden');
-
-                const applied = effectiveState && effectiveState.expandedTab && applyExpandedTab(effectiveState.expandedTab);
-                if (!applied) {
-                  const expandedCard = document.querySelector('#section-board .section-card.expanded');
-                  if (expandedCard) expandCardBody(expandedCard);
-                }
-                if (effectiveState && typeof effectiveState.scrollY === 'number' && effectiveState.scrollY > 0) {
-                  requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, effectiveState.scrollY)));
-                }
-
-                switchBottomTab((effectiveState && effectiveState.activeBottomTab) || 'overview');
-              });
+              shAfterScan(activeTab.id, activeTab.url);
 
               const storageKey = `picked_colors_${activeTab.id}`;
               chrome.storage.local.get([storageKey], (res) => {
@@ -202,6 +151,20 @@ document.addEventListener('DOMContentLoaded', () => {
               ]).then(([backendItems, scriptItems]) => {
                 if (myGeneration !== extractGeneration) return;
                 renderTechStack(data.techStack, [...(backendItems || []), ...(scriptItems || [])]);
+              });
+              };
+              const extracted = !chrome.runtime.lastError && extractResults && extractResults.length && extractResults[0].result;
+              if (!extracted) { proceed(extractResults); return; }
+              chrome.scripting.executeScript({ target: { tabId: activeTab.id }, files: ['content_insights.js'] }, (insResults) => {
+                if (!isCurrent()) return;
+                if (!chrome.runtime.lastError && insResults && insResults[0] && insResults[0].result) {
+                  const found = insResults[0].result;
+                  extractResults[0].result.insights = found;
+                  // CLS is the worst session window, which the insights script measures the way the metric defines it
+                  const vitals = extractResults[0].result.webVitals;
+                  if (found.shifts && found.shifts.cls != null && vitals) vitals.cls = found.shifts.cls;
+                }
+                proceed(extractResults);
               });
             });
           });
@@ -260,19 +223,19 @@ document.addEventListener('DOMContentLoaded', () => {
       const html = buildSeoAuditReportHtml(lastExtractedData);
       const blob = new Blob([html], { type: 'text/html' });
       const url = URL.createObjectURL(blob);
-      let filename = 'seo-audit-report.html';
+      let filename = 'page-report.html';
       try {
         const host = lastExtractedData.meta && lastExtractedData.meta.canonical
           ? new URL(lastExtractedData.meta.canonical).hostname
           : null;
-        if (host) filename = `seo-audit-report-${host}.html`;
+        if (host) filename = `page-report-${host}.html`;
       } catch (e) { }
 
       chrome.downloads.download({ url, filename }, (downloadId) => {
         if (chrome.runtime.lastError) {
           window.open(url, '_blank');
         } else {
-          showToast('SEO audit report exported');
+          showToast('Page report exported');
         }
       });
     });
@@ -285,9 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast('Nothing to export yet');
         return;
       }
-      const asObject = {};
-      lastTechStackGrouped.forEach((names, category) => { asObject[category] = names; });
-      const json = JSON.stringify(asObject, null, 2);
+      const json = JSON.stringify(buildTechStackExport(), null, 2);
       const blob = new Blob([json], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       let filename = 'tech-stack.json';
@@ -441,237 +402,25 @@ function collapseCardBody(card) {
   body.style.height = '0px';
 }
 
-const SECTION_GRID_COLUMNS = 4;
 
-function setBoardLayoutMode(board, mode) {
-  if (!board) return;
-  const newMode = mode === 'grid' ? 'grid' : 'list';
-  const wasGrid = board.classList.contains('grid-mode');
-  if ((newMode === 'grid') !== wasGrid) {
-    const expanded = board.querySelector('.section-card.expanded');
-    if (expanded) closeSectionTile(expanded);
-  }
-  board.classList.toggle('grid-mode', newMode === 'grid');
-}
-
-function setSectionLayoutMode(mode) {
-  setBoardLayoutMode(document.getElementById('section-board'), mode);
-}
-
-function getGridRowTiles(card, allCards) {
-  const visible = allCards.filter(c => c.dataset.tab && !c.classList.contains('hidden'));
-  const idx = visible.indexOf(card);
-  if (idx === -1) return [card];
-  const rowStart = Math.floor(idx / SECTION_GRID_COLUMNS) * SECTION_GRID_COLUMNS;
-  const rowEnd = Math.min(rowStart + SECTION_GRID_COLUMNS, visible.length);
-  return visible.slice(rowStart, rowEnd);
-}
-
-function restoreBodyToOwner(card) {
-  const body = getCardBodyEl(card);
-  if (body && body.parentElement !== card) card.appendChild(body);
-  if (body) body.style.removeProperty('--tile-accent');
-}
-
-function collapseAndRestore(card) {
-  const board = card.closest('.section-board');
-  const wasGrid = !!(board && board.classList.contains('grid-mode'));
-  const body = getCardBodyEl(card);
-  collapseCardBody(card);
-  if (!wasGrid || !body) return;
-
-  const token = (body._collapseToken = (body._collapseToken || 0) + 1);
-  let finished = false;
-  const finish = () => {
-    if (finished || body._collapseToken !== token) return;
-    finished = true;
-    body.removeEventListener('transitionend', onTransitionEnd);
-    restoreBodyToOwner(card);
-  };
-  const onTransitionEnd = (e) => { if (e.propertyName === 'height') finish(); };
-  body.addEventListener('transitionend', onTransitionEnd);
-  setTimeout(finish, 320);
-}
-
-function openSectionTile(card) {
-  const board = card.closest('.section-board');
-  if (!board) return;
-  const cards = Array.from(board.querySelectorAll('.section-card'));
-
-  cards.forEach(c => {
-    if (c !== card && c.classList.contains('expanded')) {
-      collapseAndRestore(c);
-    }
-    c.classList.remove('expanded', 'dimmed');
-  });
-
-  card.classList.add('expanded');
-
-  if (board.classList.contains('grid-mode')) {
-    const body = getCardBodyEl(card);
-    const rowTiles = getGridRowTiles(card, cards);
-    const lastInRow = rowTiles[rowTiles.length - 1];
-    if (body && lastInRow && lastInRow.nextSibling !== body) {
-      lastInRow.insertAdjacentElement('afterend', body);
-    }
-    if (body) body.style.setProperty('--tile-accent', card.style.getPropertyValue('--tile-accent'));
-  }
-
-  expandCardBody(card);
-  cards.forEach(c => { if (c !== card) c.classList.add('dimmed'); });
-  syncSeoPillsForBoard(board);
-}
-
-function closeSectionTile(card) {
-  const board = card.closest('.section-board');
-  collapseAndRestore(card);
-  card.classList.remove('expanded', 'dimmed');
-  if (board) board.querySelectorAll('.section-card').forEach(c => c.classList.remove('dimmed'));
-  syncSeoPillsForBoard(board);
-}
-
-// keeps the Modern Look pill bar's active state in sync no matter how a card was
-// expanded/collapsed (pill click, header click, checklist jump, settings restore, ...)
-function syncSeoPillsForBoard(board) {
-  if (!board) return;
-  if (board.id === 'seo-meta-board') syncSeoPillActiveStates('seo-meta-board', 'seo-meta-pills');
-  else if (board.id === 'seo-performance-board') syncSeoPillActiveStates('seo-performance-board', 'seo-performance-pills');
-}
-
-function saveUiState() {
-  if (!lastActiveTabId || !chrome.storage.session) return;
-  const board = document.getElementById('section-board');
-  const expandedCard = board && board.querySelector('.section-card.expanded');
-  chrome.storage.session.set({
-    [`ui_state_${lastActiveTabId}`]: {
-      expandedTab: expandedCard ? expandedCard.dataset.tab : null,
-      scrollY: window.scrollY,
-      activeBottomTab
-    }
-  });
-}
-
-function restoreUiState(tabId, callback) {
-  if (!tabId || !chrome.storage.session) { callback(null); return; }
-  chrome.storage.session.get([`ui_state_${tabId}`], (res) => {
-    callback(res[`ui_state_${tabId}`] || null);
-  });
-}
-
-function applyExpandedTab(tabKey) {
-  const target = document.querySelector(`.section-card[data-tab="${tabKey}"]`);
-  if (!target || target.classList.contains('hidden')) return false;
-  openSectionTile(target);
-  return true;
-}
-
-let scrollSaveDebounceTimer = null;
-window.addEventListener('scroll', () => {
-  clearTimeout(scrollSaveDebounceTimer);
-  scrollSaveDebounceTimer = setTimeout(saveUiState, 200);
-}, { passive: true });
-
-// Overview/SEO/Tools depend on data extracted from the active page; Settings/Info don't,
-// so they stay reachable even while extraction is loading or has failed.
-function updateContentVisibility() {
-  const loadingEl = document.getElementById('loading');
-  const contentEl = document.getElementById('content');
-  const onDataTab = activeBottomTab === 'overview' || activeBottomTab === 'seo' || activeBottomTab === 'tools';
-  const showLoading = contentUnavailable && onDataTab;
-  loadingEl.classList.toggle('hidden', !showLoading);
-  contentEl.classList.toggle('hidden', showLoading);
-}
-
-let lastNonSettingsTab = 'overview';
-
-function switchBottomTab(tabKey) {
-  const key = ['overview', 'seo', 'tools', 'settings', 'info'].includes(tabKey) ? tabKey : 'overview';
-  if (activeBottomTab !== 'settings') lastNonSettingsTab = activeBottomTab;
-  document.querySelectorAll('.tab-panel').forEach(panel => {
-    panel.classList.toggle('hidden', panel.id !== `tab-panel-${key}`);
-  });
-  document.querySelectorAll('.bottom-nav-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.bottomTab === key);
-  });
-  const settingsHeaderBtn = document.getElementById('settings-header-btn');
-  if (settingsHeaderBtn) settingsHeaderBtn.classList.toggle('active', key === 'settings');
-  activeBottomTab = key;
-  updateContentVisibility();
-  saveUiState();
-}
-
-function jumpToToolsSection(sectionKey) {
-  const card = document.querySelector(`.section-card[data-tab="${sectionKey}"]`);
-  const panel = card && card.closest('.tab-panel');
-  const tabKey = panel ? panel.id.replace('tab-panel-', '') : 'tools';
-  switchBottomTab(tabKey);
-
-  // In Modern Look, Meta and Performance are two separate group panels and only one
-  // is shown at a time — jumping to a card in the OTHER group needs to flip that
-  // switcher first, or the now-expanded card stays invisible behind the hidden panel.
-  const groupPanel = card && card.closest('.seo-group-panel');
-  if (groupPanel) {
-    const seoPanelEl = document.getElementById('tab-panel-seo');
-    if (seoPanelEl && seoPanelEl.classList.contains('modern-look')) {
-      showSeoGroup(groupPanel.dataset.group);
-    }
-  }
-
-  applyExpandedTab(sectionKey);
-  if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-const BOTTOM_NAV_SHORTCUT_KEYS = { '1': 'overview', '2': 'seo', '3': 'tools', '4': 'info' };
-
-function setupBottomNav() {
-  document.querySelectorAll('.bottom-nav-btn').forEach(btn => {
-    btn.addEventListener('click', () => switchBottomTab(btn.dataset.bottomTab));
-  });
-
-  const settingsHeaderBtn = document.getElementById('settings-header-btn');
-  if (settingsHeaderBtn) {
-    settingsHeaderBtn.addEventListener('click', () => switchBottomTab('settings'));
-  }
-
-  const settingsBackBtn = document.getElementById('settings-back-btn');
-  if (settingsBackBtn) {
-    settingsBackBtn.addEventListener('click', () => switchBottomTab(lastNonSettingsTab));
-  }
-
-  document.addEventListener('keydown', (e) => {
-    if (!e.altKey || e.ctrlKey || e.metaKey) return;
-    const tabKey = BOTTOM_NAV_SHORTCUT_KEYS[e.key];
-    if (!tabKey) return;
-    const active = document.activeElement;
-    const isTyping = active && (
-      active.tagName === 'INPUT' ||
-      active.tagName === 'TEXTAREA' ||
-      active.tagName === 'SELECT' ||
-      active.isContentEditable
-    );
-    if (isTyping) return;
-    e.preventDefault();
-    switchBottomTab(tabKey);
-  });
-}
 
 // info tab — static reference content, independent of any scan. Category colors reuse
 // the same --c-* accents the matching section-cards already use, so the glossary/guide
 // visually ties back to the actual UI instead of introducing a new color language.
 const INFO_QUICKSTART_STEPS = [
-  'Click <strong>Refresh</strong> (top right) to scan the current tab.',
-  'Check <strong>Overview</strong> for the big picture — health score, category rings, quick stats.',
-  'Open <strong>Tools</strong> and expand any card for the full detail behind a number.',
-  'Use the export buttons at the bottom of Tools to share a report with your team.'
+  'Open the panel on any page. Stylytics scans it automatically; tap <strong>Rescan</strong> (top right) to scan again.',
+  'Check <strong>Overview</strong> for the health score and the <strong>Next best fix</strong>.',
+  'Open <strong>Audit</strong> to see every issue by category. Tap an issue to see what it means and what to change.',
+  'Use <strong>Tools</strong> for fonts, colors, spacing, inspect and screenshots. The magnifier jumps to anything.'
 ];
 
 const HOWTO_GUIDE = [
   {
     category: 'Getting Started', color: 'var(--accent)',
     items: [
-      { title: 'Scanning a page', desc: 'Stylytics analyzes the active tab automatically when opened, and again any time you click Refresh. Results populate the Overview and Tools tabs.' },
-      { title: 'Overview dashboard', desc: 'A snapshot of the current page: an SEO health score, category rings (Design Consistency, LLM Visibility, Accessibility, Performance, Dark Patterns), quick stats, and an Issue Breakdown bar.' },
-      { title: 'Exclude header & footer', desc: 'Toggle at the bottom of Overview. When on, word count, headings, and links used for the SEO audit ignore header/nav/footer boilerplate so scores reflect the main content only.' }
+      { title: 'Scanning a page', desc: 'Stylytics analyzes the active tab when the panel opens, when you switch tabs, and when you tap Rescan. Results fill Overview, Audit and Tools.' },
+      { title: 'Overview', desc: 'One overall score (an average of the category scores), six tappable bars, and a Next best fix button. Up next lists the following issues, and Snapshot shows fonts, colors, links and images.' },
+      { title: 'Main content only', desc: 'The pill on the Overview card, also in Settings, switches between scanning the whole page and only its main content, so header and footer boilerplate does not affect word count, headings or links.' }
     ]
   },
   {
@@ -680,8 +429,8 @@ const HOWTO_GUIDE = [
       { title: 'Typography', desc: 'Lists every font family and size in use, plus a Live Font Preview — type any font name (including ones not on the page) to preview it swapped in on the live page without touching the source.' },
       { title: 'Colors', desc: 'Text/background/hover color palettes, a Color Palette Generator, a WCAG contrast checker for text-on-background pairs, and a Pick Color eyedropper for sampling colors directly off the page.' },
       { title: 'Outline', desc: 'The page\'s heading hierarchy (H1–H6) with hierarchy-skip detection, plus a copyable table of contents. Click any heading in the list to highlight the matching element on the live page.' },
-      { title: 'Design Tokens & Grid Overlay', desc: 'Detected spacing, radius, shadow, and z-index values actually used on the page. The Grid Overlay control here paints a fixed 8px or baseline grid over the live page to check spacing/alignment visually.' },
-      { title: 'Vibe strip & Consistency badge', desc: 'A one-line aesthetic summary ("Warm, minimal, vibrant...") plus a badge scoring how consistent the fonts/colors/spacing are — shown at the top of the Tools tab.' }
+      { title: 'Design tokens', desc: 'Detected spacing, radius, shadow, and z-index values actually used on the page, with a Starter Kit export for Tailwind, CSS variables or design tokens JSON.' },
+      { title: 'Page style & design consistency', desc: 'Overview shows a one-line summary of the page style. Audit › Design consistency scores how steady the colors, fonts and spacing are.' }
     ]
   },
   {
@@ -690,8 +439,10 @@ const HOWTO_GUIDE = [
       { title: 'Meta Insights', desc: 'Title, description, canonical URL, a mocked search-result preview, a robots.txt/sitemap.xml check, and trust signals like author/HTTPS.' },
       { title: 'Backlinks', desc: 'Every link on the page, classified internal vs. external, with anchor-text quality flags (e.g. generic "click here" text) and an on-demand broken-link checker.' },
       { title: 'Structured Data', desc: 'Detected JSON-LD blocks and their schema types (Article, Product, FAQPage, ...), with parse-error checking.' },
-      { title: 'SEO Score', desc: 'A 20-point pass/fail checklist. Failing items are clickable — tap one to jump straight to the section that shows the actual evidence.' },
+      { title: 'SEO checks', desc: 'A 20-point checklist under Audit › SEO & content. Tap any issue to see what it means, what to change, and a shortcut to the evidence.' },
       { title: 'LLM Visibility (GEO)', desc: 'Checks how easily AI answer engines (ChatGPT, Perplexity, Google AI Overviews) can parse and cite the page — a separate discipline from classic SEO.' },
+      { title: 'Readability', desc: 'Audit › SEO › Readability. Flesch reading ease and grade level, sentence length, passive voice, complex words and paragraph length, worked out from the main text of the page. English only.' },
+      { title: 'Schema check', desc: 'Audit › SEO › Schema check. Checks each JSON-LD block (Article, Product, FAQ, Breadcrumb, Organization and more) for missing required properties, malformed dates, prices and addresses, leftover placeholder text and markup that disagrees with the page. It draws a possible search appearance and writes the missing properties for you to paste.' },
       { title: 'Social Preview', desc: 'Mocked Facebook, X/Twitter, and LinkedIn share cards built from the page\'s Open Graph and Twitter Card tags, with warnings if the preview image is missing or undersized.' }
     ]
   },
@@ -700,6 +451,11 @@ const HOWTO_GUIDE = [
     items: [
       { title: 'Accessibility', desc: 'Missing alt text, unlabeled form fields, missing ARIA landmarks, and heading-hierarchy issues — the same data source as several SEO checks.' },
       { title: 'Dark Patterns', desc: 'Scans for manipulative UX: pre-checked opt-in boxes, confirm-shaming decline copy, fake urgency/scarcity claims, hidden cancel/unsubscribe links, and more. These are heuristics — a hit is worth a human look, not proof of intent.' },
+      { title: 'Accessibility lab', desc: 'Tests that behave like a person: a numbered keyboard tab-order path, a focus-visibility check, reading order against screen order, the accessibility tree a screen reader hears, WCAG text-spacing and zoom stress tests, and ARIA validation.' },
+      { title: 'Copy-ready fixes', desc: 'Open any failing check in the Audit and you get the actual change, not just advice: the missing meta tag filled from your page, width and height for the images that lack them, a preload for the largest image, the scripts to defer, labels for form fields. Use Copy all on a category to get one block grouped by where each piece goes. Drafted text such as alt text is marked as a draft.' },
+      { title: 'Link checker', desc: 'Tools › Link checker. Requests every link on the page, including the menu and footer, a few at a time, and sorts them into working, redirecting, broken, server error and can\'t verify (sites that refuse automated visits). Also finds jump links that point at an id that does not exist.' },
+      { title: 'Server headers', desc: 'Audit › Security & delivery. Requests the page and a few of its heaviest files for their headers (the content is not read) and checks HTTPS, HSTS, Content-Security-Policy, framing, compression and caching. The fix is written for nginx, Apache or Netlify.' },
+      { title: 'Overflow finder', desc: 'Tools › Overflow finder. Opens the page in a small test window at several widths and names the element that makes it scroll sideways at each one, with a CSS fix. Needs a moment: the test window closes itself.' },
       { title: 'Media Contact', desc: 'Detected author, organization, contact info, and social profile links, used as E-E-A-T (experience/expertise/authority/trust) signals.' }
     ]
   },
@@ -708,32 +464,42 @@ const HOWTO_GUIDE = [
     items: [
       { title: 'Performance', desc: 'Page load time and a count of render-blocking scripts in <head>.' },
       { title: 'Core Web Vitals', desc: 'Google\'s LCP, CLS, and INP scores for the page, with a direct link to check the live score in PageSpeed Insights.' },
+      { title: 'Image audit', desc: 'Audit › Page speed › Image audit. Compares each image\'s file size with the space it fills, flags missing width and height, legacy formats and lazy-loading mistakes, ranks them worst first with an estimated saving, and shows page weight by file type.' },
+      { title: 'Layout shifts & LCP', desc: 'Names the elements that caused layout shift and the element that painted last, with a button to point at them on the page and replay each shift. CLS is measured as the worst session window, the way the metric is defined.' },
+      { title: 'Field data (CrUX)', desc: 'Real-user Core Web Vitals from the Chrome UX Report next to this visit, with a plain explanation when they disagree. Needs a free API key, which you paste in Settings. It stays on your device.' },
+      { title: 'Third-party cost', desc: 'Audit › Page speed › Third-party cost. Names the vendors behind every request and ranks them by weight, requests, time and whether they block rendering. The Waterfall tab draws every request against first paint and page load. File sizes that other sites hide can be asked for with Measure missing sizes.' },
+      { title: 'Font optimizer', desc: 'Audit › Page speed › Font optimizer. Finds fonts that download but are never used, text that stays hidden while a font loads, fonts found late, old formats and the layout jump when a web font swaps in. It writes the font-display, preload and fallback code for you.' },
       { title: 'Tech Stack', desc: 'Frameworks, analytics, and CMS platforms detected from scripts and response headers.' }
     ]
   },
   {
     category: 'Utilities', color: 'var(--c-tokens)',
     items: [
-      { title: 'Global search', desc: 'The search box at the top of Tools searches fonts, colors, links, and headings across everything already extracted from the page — no need to open each card individually.' },
+      { title: 'Search', desc: 'The magnifier in the header (or Ctrl+K) searches issues, tools, settings, glossary terms, and the fonts, colors, headings and links on the page.' },
+      { title: 'Changes since your last scan', desc: 'Every scan is saved on your device (a compact copy, up to 20 per page). Rescan later and Overview shows what got worse, better or changed: titles, headings, trackers, fonts, vitals and new issues. Turn it off in Settings.' },
+      { title: 'Design system', desc: 'Tools › Design system. Paste or import your tokens (CSS or SCSS variables, a Tailwind config, or design-tokens JSON) and see which colors, spacing, sizes, radii and fonts are on the system, which are near misses, and which are off it.' },
+      { title: 'Site scan', desc: 'Tools › Site scan. Picks up to 10 pages from the sitemap and scans them one at a time in a background tab, then reports duplicate titles and descriptions, orphan pages, design sprawl, structured-data coverage and the sections that score lowest.' },
+      { title: 'Review pins', desc: 'Tools › Review pins. Point at any element on the live page, write a note, and a numbered marker stays there with a screenshot. Export the list as a punch list, or copy it for a ticket.' },
+      { title: 'Compare pages', desc: 'Tools › Compare pages. Put this page next to another: staging against live, before against after a release, or yours against a competitor\'s. Type just a domain to compare the same page on it. Scores, copy, speed, technology, fonts, colors and issues side by side, with an exported report.' },
       { title: 'Inspect Mode', desc: 'Click any element on the live page to see its exact computed styles, box-model spacing, and position in the DOM tree.' },
-      { title: 'Dark Mode Preview', desc: 'Simulates a dark theme on the live page by inverting computed colors — a quick check, not a real dark-mode implementation.' },
-      { title: 'Colorblind Simulation', desc: 'Previews the live page under protanopia, deuteranopia, tritanopia, or monochrome vision.' },
+      { title: 'Dark Mode Preview', desc: 'Under Tools › Overlays. Simulates a dark theme on the live page by inverting computed colors — a quick check, not a real dark-mode implementation.' },
+      { title: 'Colorblind Simulation', desc: 'Under Tools › Overlays. Previews the live page under protanopia, deuteranopia, tritanopia, or monochrome vision.' },
       { title: 'Screenshot & Annotate', desc: 'Capture the visible viewport or the full page, then crop, arrow, blur, or text-annotate it in the built-in editor before exporting as PNG, JPG, or PDF.' },
       { title: 'Responsive Simulator', desc: 'Preview the page at common device breakpoints without resizing your actual browser window.' },
       { title: 'Assets & Images', desc: 'Every detected image and logo, with broken-image detection and a one-click "download all as ZIP".' },
       { title: 'Export Style Guide', desc: 'Downloads a standalone HTML style guide of the page\'s fonts, colors, and spacing — handy to hand to a designer or client.' },
-      { title: 'Export SEO & GEO Report', desc: 'Downloads the SEO Score and LLM Visibility checklists as a shareable HTML report.' },
+      { title: 'Export page report', desc: 'From the ⋯ menu. Downloads the SEO and AI readiness checklists as a shareable HTML report.' },
       { title: 'Export Starter Kit', desc: 'Turns the detected Design Tokens into a ready-to-use Tailwind config, CSS variables, or SCSS file.' }
     ]
   },
   {
     category: 'Settings', color: 'var(--text-tertiary)',
     items: [
-      { title: 'Theme', desc: 'Switches Stylytics\' own light/dark appearance — this is cosmetic for the panel itself and separate from "Dark Mode Preview," which affects the live page.' },
-      { title: 'Sections (show, hide, reorder)', desc: 'Controls which cards appear in the Tools tab and in what order — new features you haven\'t hidden appear automatically.' },
-      { title: 'Restore Last Session', desc: 'When on, reopening the panel returns you to the tab/section you were last viewing instead of always starting on Overview.' },
-      { title: 'Grid Layout / List View', desc: 'Display-density options for the Tools section tiles and the Assets grid.' },
-      { title: 'Default Expanded Section & Max Items Per Grid', desc: 'Pick which card opens automatically, and cap how many items (colors, images, links) each grid shows before truncating.' }
+      { title: 'Appearance', desc: 'System, Light or Dark for Stylytics itself. This is separate from "Dark Mode Preview," which changes the live page.' },
+      { title: 'Live preview strip', desc: 'When a font, palette, grid, color-blind or dark preview is changing the real page, a dark strip under the header says so. Reset all puts the page back.' },
+      { title: 'Remember where I left off', desc: 'When on, reopening the panel for a page returns you to the tab and screen you were last viewing instead of Overview.' },
+      { title: 'List view for assets', desc: 'Show detected images and logos as a list instead of a grid.' },
+      { title: 'Items shown per grid', desc: 'Caps how many items (colors, images, links) each grid shows before truncating.' }
     ]
   }
 ];
@@ -937,64 +703,6 @@ function setupInfoTab() {
   applyFilter();
 }
 
-function wireCardBodyAutoHeight(card, body) {
-  body.addEventListener('transitionend', (e) => {
-    if (e.propertyName === 'height' && card.classList.contains('expanded')) {
-      body.style.height = 'auto';
-    }
-  });
-}
-
-function setupSections() {
-  const cards = document.querySelectorAll('.section-board .section-card');
-
-  cards.forEach(card => {
-    const header = card.querySelector('.section-card-header');
-    const body = card.querySelector('.section-card-body');
-    if (!header || !body) return;
-
-    // Tag the body with its owning card's tab key so getCardBodyEl() can find it again
-    // even after grid mode reparents it onto #section-board to span the full row width.
-    if (card.dataset.tab) body.dataset.ownerTab = card.dataset.tab;
-
-    wireCardBodyAutoHeight(card, body);
-
-    header.addEventListener('click', () => {
-      if (card.classList.contains('expanded')) {
-        // In Modern Look this card is the only one rendered at all (every other
-        // card in the board is display:none) — closing it would leave a blank
-        // panel with nothing to fall back to, so its own header can't collapse it.
-        // Switching sections is the pill bar's job there.
-        if (isSoleModernLookCard(card)) return;
-        closeSectionTile(card);
-      } else {
-        openSectionTile(card);
-      }
-      saveUiState();
-    });
-  });
-}
-
-function setupKeyboardNav() {
-  const board = document.getElementById('section-board');
-  if (!board) return;
-
-  board.addEventListener('keydown', (e) => {
-    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-
-    const headers = Array.from(board.querySelectorAll('.section-card-header'))
-      .filter(h => h.offsetParent !== null);
-    const currentIndex = headers.indexOf(document.activeElement);
-    if (currentIndex === -1) return;
-
-    e.preventDefault();
-    const nextIndex = e.key === 'ArrowDown'
-      ? Math.min(currentIndex + 1, headers.length - 1)
-      : Math.max(currentIndex - 1, 0);
-    headers[nextIndex].focus();
-  });
-}
-
 // Shared by the global search box and the DOM-tree search input — both previously kept
 // their own module-level timer variable for the exact same clearTimeout/setTimeout shape.
 function debounce(fn, delay) {
@@ -1012,301 +720,6 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
-}
-
-function buildStyleGuideHtml(data) {
-  const title = escapeHtml((data.meta && data.meta.title) || 'Style Guide');
-  const generatedOn = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
-  const vibe = escapeHtml(computeSiteVibe(data));
-
-  const uniqueColors = [];
-  const seenStyleGuideColorHexes = new Set();
-  [...(data.colors || []), ...(data.bgColors || [])].forEach(c => {
-    if (!seenStyleGuideColorHexes.has(c.hex)) {
-      seenStyleGuideColorHexes.add(c.hex);
-      uniqueColors.push(c);
-    }
-  });
-
-  const uniqueFonts = [...new Set((data.fonts || []).map(f => f.trim()))];
-  const sizes = data.fontSizes || [];
-  const tokens = data.designTokens || { margins: [], paddings: [], radii: [], shadows: [] };
-  const spacingValues = [...new Set([...(tokens.margins || []), ...(tokens.paddings || [])].map(t => t.value))].slice(0, 12);
-  const gradients = data.gradients || [];
-
-  const fontLinks = (data.fontStyles || []).map(fs => {
-    if (fs.type === 'link') return `<link rel="stylesheet" href="${escapeHtml(fs.href)}">`;
-    // cssText is raw page-controlled CSS placed inside a <style> tag — HTML-escaping it
-    // would break legitimate CSS, so just neutralize the one sequence that could close the tag early.
-    if (fs.type === 'style') return `<style>${String(fs.cssText || '').replace(/<\/style/gi, '<\\/style')}</style>`;
-    return '';
-  }).join('\n');
-
-  const colorSwatches = uniqueColors.map(c => `
-    <div class="swatch">
-      <div class="swatch-color" style="background:${escapeHtml(c.hex)};"></div>
-      <div class="swatch-label">${escapeHtml(c.hex)}</div>
-    </div>`).join('');
-
-  const gradientSwatches = gradients.map(g => `
-    <div class="swatch">
-      <div class="swatch-color" style="background-image:${escapeHtml(g)};"></div>
-      <div class="swatch-label">${escapeHtml(g.split('(')[0])}</div>
-    </div>`).join('');
-
-  const fontSamples = uniqueFonts.map(f => {
-    const clean = f.split(',')[0].replace(/['"]/g, '').trim();
-    return `
-    <div class="font-sample">
-      <div class="font-name">${escapeHtml(clean)}</div>
-      <div class="font-preview" style="font-family: ${escapeHtml(f)};">The quick brown fox jumps over the lazy dog</div>
-    </div>`;
-  }).join('');
-
-  const sizeScale = sizes.map(s => `
-    <div class="size-row">
-      <span class="size-label">${escapeHtml(s)}</span>
-      <span class="size-preview" style="font-size:${escapeHtml(s)};">Aa</span>
-    </div>`).join('');
-
-  const spacingScale = spacingValues.map(s => `
-    <div class="spacing-row">
-      <span class="spacing-label">${escapeHtml(s)}</span>
-      <span class="spacing-bar" style="width:${escapeHtml(s)};"></span>
-    </div>`).join('');
-
-  const radiusSamples = (tokens.radii || []).slice(0, 6).map(r => `
-    <div class="radius-sample">
-      <div class="radius-box" style="border-radius:${escapeHtml(r.value)};"></div>
-      <div class="swatch-label">${escapeHtml(r.value)}</div>
-    </div>`).join('');
-
-  const shadowSamples = (tokens.shadows || []).slice(0, 4).map(s => `
-    <div class="shadow-sample">
-      <div class="shadow-box" style="box-shadow:${escapeHtml(s.value)};"></div>
-      <div class="swatch-label">Shadow</div>
-    </div>`).join('');
-
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>Style Guide — ${title}</title>
-${fontLinks}
-<style>
-  * { box-sizing: border-box; }
-  body { margin: 0; padding: 56px 64px; background: #fcfcfd; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #18181b; }
-  .report-header { border-bottom: 1px solid #e4e4e7; padding-bottom: 22px; margin-bottom: 36px; }
-  .eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #ea580c; font-weight: 700; margin-bottom: 8px; }
-  h1 { font-size: 26px; margin: 0 0 6px; letter-spacing: -0.3px; }
-  .subtitle { color: #71717a; font-size: 13px; }
-  .vibe-tag { display: inline-block; margin-top: 10px; background: #fff1e6; color: #c2410c; border-radius: 20px; padding: 5px 12px; font-size: 11.5px; font-weight: 600; }
-  h2 { font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.8px; color: #71717a; font-weight: 700; border-bottom: 1px solid #e4e4e7; padding-bottom: 10px; margin: 46px 0 20px; }
-  .swatches { display: flex; flex-wrap: wrap; gap: 16px; }
-  .swatch { width: 104px; }
-  .swatch-color { width: 104px; height: 74px; border-radius: 10px; border: 1px solid rgba(0,0,0,0.08); background-size: cover; }
-  .swatch-label { margin-top: 7px; font-size: 11px; font-family: 'SFMono-Regular', Consolas, monospace; color: #3f3f46; }
-  .font-sample { margin-bottom: 26px; padding-bottom: 22px; border-bottom: 1px dashed #e4e4e7; }
-  .font-sample:last-child { border-bottom: none; }
-  .font-name { font-size: 12px; color: #71717a; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.4px; }
-  .font-preview { font-size: 28px; color: #18181b; }
-  .size-row, .spacing-row { display: flex; align-items: center; gap: 16px; margin-bottom: 11px; }
-  .size-label, .spacing-label { width: 64px; flex-shrink: 0; color: #71717a; font-size: 12px; font-family: 'SFMono-Regular', Consolas, monospace; }
-  .size-preview { font-size: 18px; }
-  .spacing-bar { height: 12px; background: linear-gradient(90deg, #ea580c, #fb923c); border-radius: 3px; max-width: 320px; }
-  .radius-sample, .shadow-sample { text-align: center; }
-  .radius-box, .shadow-box { width: 72px; height: 72px; background: #fff; border: 1px solid #e4e4e7; }
-  .empty { color: #a1a1aa; font-size: 13px; }
-  .footer-note { margin-top: 56px; padding-top: 18px; border-top: 1px solid #e4e4e7; color: #a1a1aa; font-size: 11.5px; }
-</style>
-</head>
-<body>
-  <div class="report-header">
-    <div class="eyebrow">Design Style Guide</div>
-    <h1>${title}</h1>
-    <div class="subtitle">Generated by Stylytics &middot; ${generatedOn}</div>
-    <div class="vibe-tag">${vibe}</div>
-  </div>
-
-  <h2>Colors</h2>
-  <div class="swatches">${colorSwatches || '<p class="empty">No colors detected</p>'}</div>
-
-  ${gradients.length ? `
-  <h2>Gradients</h2>
-  <div class="swatches">${gradientSwatches}</div>` : ''}
-
-  <h2>Typography</h2>
-  ${fontSamples || '<p class="empty">No fonts detected</p>'}
-
-  <h2>Type Scale</h2>
-  ${sizeScale || '<p class="empty">No sizes detected</p>'}
-
-  ${spacingValues.length ? `
-  <h2>Spacing Scale</h2>
-  ${spacingScale}` : ''}
-
-  ${(tokens.radii || []).length ? `
-  <h2>Border Radius</h2>
-  <div class="swatches">${radiusSamples}</div>` : ''}
-
-  ${(tokens.shadows || []).length ? `
-  <h2>Shadows</h2>
-  <div class="swatches">${shadowSamples}</div>` : ''}
-
-  <div class="footer-note">Design style guide generated with Stylytics.</div>
-</body>
-</html>`;
-}
-
-function buildSeoAuditReportHtml(data) {
-  const title = escapeHtml((data.meta && data.meta.title) || 'Untitled Page');
-  const url = (data.meta && data.meta.canonical) || '';
-  const escapedUrl = escapeHtml(url);
-  const generatedOn = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
-  const seo = computeSeoChecklist(data);
-  const llm = computeLlmVisibilityChecklist(data, lastSiteFilesResult);
-  const trust = data.trustSignals || { trustBadgeCount: 0, testimonialSectionFound: false, reviewSchemaFound: false };
-  const contact = data.mediaContact || {};
-  const a11y = data.accessibility || {};
-  const perf = data.performance || {};
-  const vitals = data.webVitals || {};
-  const seoData = data.seo || {};
-  const linkStats = computeBacklinkStats(data.links || []);
-  const structuredTypes = (data.structuredData && data.structuredData.types) || [];
-
-  const scoreCard = (label, score, passCount, total) => {
-    const color = score >= 80 ? '#16a34a' : score >= 50 ? '#d97706' : '#ef4444';
-    return `
-      <div class="score-card">
-        <div class="score-ring" style="border-color: ${color}; color: ${color};">${score}</div>
-        <div>
-          <div class="score-card-label">${escapeHtml(label)}</div>
-          <div class="score-card-sub">${passCount} of ${total} checks passed</div>
-        </div>
-      </div>`;
-  };
-
-  const checklistHtml = (checks) => checks.map(c => `
-    <div class="check-row">
-      <span class="check-icon" style="color: ${c.pass ? '#16a34a' : '#ef4444'};">${c.pass ? '✓' : '✕'}</span>
-      <span>${escapeHtml(c.label)}${c.detail ? `<span class="check-detail">${escapeHtml(c.detail)}</span>` : ''}</span>
-    </div>`).join('');
-
-  let displayUrl = url;
-  try { if (url) displayUrl = new URL(url).hostname + new URL(url).pathname.replace(/\/$/, ''); } catch (e) { /* keep raw url */ }
-
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>SEO Audit Report — ${title}</title>
-<style>
-  * { box-sizing: border-box; }
-  body { margin: 0; padding: 48px 56px; background: #fafafa; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #18181b; }
-  .report-header { border-bottom: 2px solid #ea580c; padding-bottom: 18px; margin-bottom: 30px; }
-  .eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #ea580c; font-weight: 700; margin-bottom: 8px; }
-  .report-header h1 { font-size: 23px; margin: 0 0 6px; letter-spacing: -0.2px; }
-  .report-meta { color: #71717a; font-size: 12.5px; }
-  .report-meta a { color: #ea580c; text-decoration: none; }
-  h2 { font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.8px; color: #71717a; font-weight: 700; border-bottom: 1px solid #e4e4e7; padding-bottom: 9px; margin: 38px 0 18px; }
-  .score-row { display: flex; gap: 28px; flex-wrap: wrap; }
-  .score-card { display: flex; align-items: center; gap: 12px; }
-  .score-ring { width: 50px; height: 50px; border-radius: 50%; border: 3px solid; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 15px; flex-shrink: 0; }
-  .score-card-label { font-size: 13px; font-weight: 700; }
-  .score-card-sub { font-size: 11.5px; color: #71717a; }
-  .check-row { display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; margin-bottom: 9px; line-height: 1.4; }
-  .check-icon { font-weight: 700; flex-shrink: 0; margin-top: 1px; }
-  .check-detail { display: block; font-size: 11px; color: #a1a1aa; margin-top: 1px; }
-  .serp-card { border: 1px solid #e4e4e7; border-radius: 10px; padding: 14px 16px; background: #fff; max-width: 520px; }
-  .serp-url { font-size: 12px; color: #202124; margin-bottom: 3px; }
-  .serp-title { font-size: 18px; color: #1a0dab; margin-bottom: 3px; }
-  .serp-desc { font-size: 13px; color: #4d5156; line-height: 1.4; }
-  .kv-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 24px; font-size: 12.5px; }
-  .kv-grid div span { color: #71717a; }
-  .pill { display: inline-block; background: #fff1e6; color: #c2410c; border-radius: 20px; padding: 4px 10px; font-size: 11.5px; margin: 0 6px 6px 0; }
-  .empty { color: #a1a1aa; font-size: 13px; }
-  .footer-note { margin-top: 50px; padding-top: 16px; border-top: 1px solid #e4e4e7; color: #a1a1aa; font-size: 11.5px; }
-</style>
-</head>
-<body>
-  <div class="report-header">
-    <div class="eyebrow">SEO &amp; AI Visibility Audit</div>
-    <h1>${title}</h1>
-    <div class="report-meta">
-      ${url ? `<a href="${escapedUrl}">${escapedUrl}</a> &middot; ` : ''}Generated ${escapeHtml(generatedOn)}
-    </div>
-  </div>
-
-  <h2>Scores</h2>
-  <div class="score-row">
-    ${scoreCard('SEO Score', seo.score, seo.passCount, seo.checks.length)}
-    ${scoreCard('AI Answer Engine (GEO)', llm.score, llm.passCount, llm.checks.length)}
-  </div>
-
-  <h2>Search Engine Preview</h2>
-  <div class="serp-card">
-    <div class="serp-url">${escapeHtml(displayUrl || 'example.com')}</div>
-    <div class="serp-title">${escapeHtml((data.meta && data.meta.title) || 'Untitled page')}</div>
-    <div class="serp-desc">${escapeHtml((data.meta && data.meta.description) || 'No description available for this page.')}</div>
-  </div>
-
-  <h2>SEO Checklist</h2>
-  ${checklistHtml(seo.checks)}
-
-  <h2>AI Answer Engine (GEO) Checklist</h2>
-  ${checklistHtml(llm.checks)}
-
-  <h2>Meta Fundamentals</h2>
-  <div class="kv-grid">
-    <div><span>Title length:</span> ${((data.meta && data.meta.title) || '').length} characters</div>
-    <div><span>Description length:</span> ${((data.meta && data.meta.description) || '').length} characters</div>
-    <div><span>Canonical URL:</span> ${(data.meta && data.meta.canonical) ? 'Present' : 'Missing'}</div>
-    <div><span>Robots directive:</span> ${(seoData.robots && seoData.robots.raw) || 'Not set'}</div>
-    <div><span>Mobile viewport:</span> ${seoData.hasViewport ? 'Present' : 'Missing'}</div>
-    <div><span>H1 count:</span> ${seoData.h1Count != null ? seoData.h1Count : '—'}</div>
-  </div>
-
-  <h2>Structured Data</h2>
-  <div>${structuredTypes.length ? structuredTypes.map(t => `<span class="pill">${escapeHtml(t)}</span>`).join('') : '<p class="empty">No JSON-LD structured data found</p>'}</div>
-
-  <h2>Backlinks Overview</h2>
-  <div class="kv-grid">
-    <div><span>Total links:</span> ${linkStats.total}</div>
-    <div><span>Internal / External:</span> ${linkStats.internal} / ${linkStats.external}</div>
-    <div><span>Generic anchor text:</span> ${linkStats.generic}</div>
-    <div><span>UTM tagged:</span> ${linkStats.utm}</div>
-  </div>
-
-  <h2>Accessibility Snapshot</h2>
-  <div class="kv-grid">
-    <div><span>Images missing alt text:</span> ${a11y.imagesMissingAltCount || 0}</div>
-    <div><span>Form fields missing labels:</span> ${a11y.formFieldsMissingLabelCount || 0}</div>
-    <div><span>HTML lang attribute:</span> ${a11y.langMissing ? 'Missing' : 'Present'}</div>
-    <div><span>Broken images:</span> ${data.brokenImagesCount || 0}</div>
-  </div>
-
-  <h2>Performance &amp; Core Web Vitals</h2>
-  <div class="kv-grid">
-    <div><span>Full Page Load:</span> ${perf.loadMs != null ? perf.loadMs + ' ms' : '—'}</div>
-    <div><span>Render-Blocking Scripts:</span> ${perf.renderBlockingScripts != null ? perf.renderBlockingScripts : '—'}</div>
-    <div><span>LCP:</span> ${vitals.lcp != null ? formatCwvValue('lcp', vitals.lcp) : '—'}</div>
-    <div><span>CLS:</span> ${vitals.cls != null ? formatCwvValue('cls', vitals.cls) : '—'}</div>
-    <div><span>FCP:</span> ${vitals.fcp != null ? formatCwvValue('fcp', vitals.fcp) : '—'}</div>
-    <div><span>TTFB:</span> ${vitals.ttfb != null ? formatCwvValue('ttfb', vitals.ttfb) : '—'}</div>
-  </div>
-
-  <h2>Trust &amp; Credibility (E-E-A-T)</h2>
-  <div class="kv-grid">
-    <div><span>Trust badge indicators:</span> ${trust.trustBadgeCount || 0}</div>
-    <div><span>Testimonials / reviews section:</span> ${trust.testimonialSectionFound ? 'Found' : 'Not found'}</div>
-    <div><span>Review schema:</span> ${trust.reviewSchemaFound ? 'Found' : 'Not found'}</div>
-    ${contact.name ? `<div><span>Author / Contact:</span> ${escapeHtml(contact.name)}</div>` : ''}
-    ${contact.organization ? `<div><span>Organization:</span> ${escapeHtml(contact.organization)}</div>` : ''}
-  </div>
-
-  <div class="footer-note">SEO audit report generated with Stylytics.</div>
-</body>
-</html>`;
 }
 
 const GENERIC_ANCHOR_PHRASES = new Set(['click here', 'read more', 'here', 'this link', 'learn more', 'more', 'click', 'this', 'link', 'this page']);
@@ -1750,122 +1163,6 @@ async function downloadAllAssetsAsZip(logoUrls, imageUrls) {
   }
 }
 
-function setSectionCount(sectionKey, count) {
-  const card = document.querySelector(`.section-card[data-tab="${sectionKey}"]`);
-  if (!card) return;
-  const badge = card.querySelector('.tile-count');
-  if (!badge) return;
-  if (count > 0) {
-    badge.textContent = count > 99 ? '99+' : String(count);
-    badge.classList.remove('hidden');
-  } else {
-    badge.classList.add('hidden');
-  }
-}
-
-function setScanning(isScanning) {
-  const refreshBtn = document.getElementById('refresh-btn');
-  if (!refreshBtn) return;
-  refreshBtn.disabled = isScanning;
-  refreshBtn.classList.toggle('spinning', isScanning);
-}
-
-function setupTheme() {
-  const lightBtn = document.getElementById('theme-light-btn');
-  const darkBtn = document.getElementById('theme-dark-btn');
-  if (!lightBtn || !darkBtn) return;
-
-  const applyActive = (theme) => {
-    lightBtn.classList.toggle('active', theme !== 'dark');
-    darkBtn.classList.toggle('active', theme === 'dark');
-  };
-
-  const setTheme = (theme) => {
-    document.documentElement.setAttribute('data-theme', theme);
-    chrome.storage.local.set({ themeOverride: theme });
-    applyActive(theme);
-  };
-
-  chrome.storage.local.get(['themeOverride'], (res) => {
-    const theme = res.themeOverride || 'light';
-    document.documentElement.setAttribute('data-theme', theme);
-    if (!res.themeOverride) {
-      chrome.storage.local.set({ themeOverride: theme });
-    }
-    applyActive(theme);
-  });
-
-  lightBtn.addEventListener('click', () => setTheme('light'));
-  darkBtn.addEventListener('click', () => setTheme('dark'));
-}
-
-function showError(message, title = 'Oops..!') {
-  document.body.classList.add('error-state');
-  contentUnavailable = true;
-  const loadingEl = document.getElementById('loading');
-  loadingEl.innerHTML = `
-    <div class="error-scene">
-      <div class="error-illustration">
-        <svg class="error-svg" width="160" height="140" viewBox="0 0 160 140" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="error-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stop-color="#f97316" />
-              <stop offset="100%" stop-color="#ec4899" />
-            </linearGradient>
-            <radialGradient id="error-glow" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stop-color="#ec4899" stop-opacity="0.55" />
-              <stop offset="100%" stop-color="#ec4899" stop-opacity="0" />
-            </radialGradient>
-          </defs>
-
-          <g transform="translate(108 88)">
-            <circle class="error-glow-pulse" r="42" fill="url(#error-glow)"></circle>
-          </g>
-
-          <g transform="rotate(-6 60 68)">
-            <g class="error-page-float">
-              <rect class="error-page-surface" x="18" y="20" width="84" height="98" rx="12" stroke-width="1.5"></rect>
-              <rect class="error-line-strong" x="32" y="38" width="42" height="5" rx="2.5"></rect>
-              <rect class="error-line" x="32" y="50" width="52" height="5" rx="2.5"></rect>
-              <rect x="32" y="62" width="30" height="5" rx="2.5" fill="url(#error-grad)" opacity="0.85"></rect>
-              <rect class="error-line" x="32" y="74" width="46" height="5" rx="2.5"></rect>
-              <rect class="error-line" x="32" y="86" width="36" height="5" rx="2.5"></rect>
-            </g>
-          </g>
-
-          <g transform="translate(4 -2) rotate(-38 34 30)">
-            <g class="error-tool-recoil">
-              <rect x="28" y="8" width="12" height="30" rx="4" fill="#3f3f46" stroke="rgba(255,255,255,0.15)" stroke-width="1"></rect>
-              <rect x="31" y="14" width="3" height="18" rx="1.5" fill="rgba(255,255,255,0.14)"></rect>
-              <path d="M28 38 L34 50 L40 38 Z" fill="#52525b"></path>
-              <circle cx="34" cy="8" r="7" fill="url(#error-grad)"></circle>
-            </g>
-          </g>
-
-          <g class="error-spark">
-            <path d="M74 58 L79 53 M77 63 L85 63 M75 69 L80 74" stroke="url(#error-grad)" stroke-width="2.2" stroke-linecap="round"></path>
-          </g>
-
-          <g transform="translate(108 88)">
-            <g class="error-shield">
-              <circle class="error-shield-backing" r="32"></circle>
-              <path d="M0 -24 L20 -16 V6 C20 18 10 25 0 28 C-10 25 -20 18 -20 6 V-16 Z" fill="url(#error-grad)" stroke="rgba(255,255,255,0.2)" stroke-width="1.2"></path>
-              <path d="M-7 -3 V-8 a7 7 0 0 1 14 0 V-3" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"></path>
-              <rect x="-9" y="-3" width="18" height="15" rx="3.5" fill="#fff"></rect>
-              <circle cx="0" cy="4" r="2" fill="url(#error-grad)"></circle>
-            </g>
-          </g>
-        </svg>
-      </div>
-      <div class="error-copy">
-        <h3 class="error-title">${title}</h3>
-        <p class="error-text">${message}</p>
-      </div>
-    </div>
-  `;
-  updateContentVisibility();
-}
-
 function showToast(message) {
   const stack = document.getElementById('toast-stack');
   if (!stack) return;
@@ -1981,78 +1278,6 @@ function buildSearchIndex(data) {
   (contact.socialLinks || []).forEach(s => push('media-contact', 'Media Contact', s.platform, null, null));
 
   return index;
-}
-
-const GLOBAL_SEARCH_MAX_RESULTS = 30;
-
-function renderSearchResults(query) {
-  const resultsEl = document.getElementById('global-search-results');
-  if (!resultsEl) return;
-  const q = query.trim().toLowerCase();
-  if (!q) {
-    resultsEl.classList.add('hidden');
-    resultsEl.innerHTML = '';
-    return;
-  }
-
-  const matches = searchIndex.filter(item =>
-    item.value.toLowerCase().includes(q) || item.sectionLabel.toLowerCase().includes(q)
-  );
-  resultsEl.innerHTML = '';
-  if (!matches.length) {
-    resultsEl.innerHTML = '<div class="global-search-empty">No matches found</div>';
-    resultsEl.classList.remove('hidden');
-    return;
-  }
-
-  matches.slice(0, GLOBAL_SEARCH_MAX_RESULTS).forEach(item => {
-    const row = document.createElement('div');
-    row.className = 'global-search-result-row';
-    row.innerHTML = '<span class="global-search-result-section"></span><span class="global-search-result-value"></span>';
-    row.querySelector('.global-search-result-section').textContent = item.sectionLabel;
-    row.querySelector('.global-search-result-value').textContent = item.value;
-    row.addEventListener('click', () => {
-      jumpToToolsSection(item.section);
-      if (item.highlightType && lastActiveTabId) {
-        sendHighlightMessage(lastActiveTabId, item.highlightType, item.highlightValue);
-      }
-      resultsEl.classList.add('hidden');
-    });
-    resultsEl.appendChild(row);
-  });
-
-  if (matches.length > GLOBAL_SEARCH_MAX_RESULTS) {
-    const more = document.createElement('div');
-    more.className = 'global-search-more';
-    more.textContent = `+${matches.length - GLOBAL_SEARCH_MAX_RESULTS} more matches — refine your search`;
-    resultsEl.appendChild(more);
-  }
-
-  resultsEl.classList.remove('hidden');
-}
-
-function setupGlobalSearch() {
-  const input = document.getElementById('global-search-input');
-  const resultsEl = document.getElementById('global-search-results');
-  if (!input || !resultsEl) return;
-
-  const debouncedRenderSearchResults = debounce(renderSearchResults, 150);
-  input.addEventListener('input', (e) => debouncedRenderSearchResults(e.target.value));
-
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      input.value = '';
-      resultsEl.classList.add('hidden');
-      resultsEl.innerHTML = '';
-      input.blur();
-    }
-  });
-
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('.global-search-wrap')) {
-      resultsEl.classList.add('hidden');
-    }
-  });
 }
 
 function renderData(data, tabId) {
@@ -2802,31 +2027,6 @@ function contrastRatio(hexA, hexB) {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
-function formatColorsForExport(colorsArray, format) {
-  if (format === 'tailwind') {
-    const entries = colorsArray.map((c, i) => `        'color-${i + 1}': '${c.hex}',`).join('\n');
-    return {
-      label: 'Tailwind config',
-      text: `module.exports = {\n  theme: {\n    extend: {\n      colors: {\n${entries}\n      }\n    }\n  }\n}`
-    };
-  }
-  if (format === 'scss') {
-    return {
-      label: 'SCSS variables',
-      text: colorsArray.map((c, i) => `$color-${i + 1}: ${c.hex};`).join('\n')
-    };
-  }
-  if (format === 'json') {
-    const obj = {};
-    colorsArray.forEach((c, i) => { obj[`color-${i + 1}`] = c.hex; });
-    return { label: 'JSON', text: JSON.stringify(obj, null, 2) };
-  }
-  return {
-    label: 'CSS',
-    text: [':root {', ...colorsArray.map((c, i) => `  --color-${i + 1}: ${c.hex};`), '}'].join('\n')
-  };
-}
-
 // responsive presets
 const RESPONSIVE_DEVICE_PRESETS = [
   { name: 'iPhone 16 Pro Max', width: 440, height: 956 },
@@ -3180,23 +2380,6 @@ function setupColorblindToggle() {
   });
 }
 
-// overview: exclude header/footer from the SEO audit
-function setupExcludeHeaderFooterToggle() {
-  const toggle = document.getElementById('exclude-header-footer-toggle');
-  if (!toggle) return;
-  chrome.storage.local.get(['excludeHeaderFooterAudit'], (res) => {
-    toggle.checked = !!res.excludeHeaderFooterAudit;
-  });
-  toggle.addEventListener('change', () => {
-    const enabled = toggle.checked;
-    chrome.storage.local.set({ excludeHeaderFooterAudit: enabled }, () => {
-      showToast(enabled ? 'Excluding header & footer from the SEO audit' : 'Including header & footer in the SEO audit');
-      const refreshBtn = document.getElementById('refresh-btn');
-      if (refreshBtn) refreshBtn.click();
-    });
-  });
-}
-
 // dark mode toggle
 function setupDarkModePreviewToggle() {
   const toggle = document.getElementById('dark-mode-preview-toggle');
@@ -3260,15 +2443,6 @@ const SETTINGS_VERSION = 1;
 const DEFAULT_MAX_ITEMS_PER_GRID = 48;
 const MAX_ITEMS_PER_GRID_LIMIT = 200; // matches #settings-max-items's max="200"
 
-function getSectionMeta(boardId) {
-  const board = document.getElementById(boardId || 'section-board');
-  const cards = board ? Array.from(board.querySelectorAll('.section-card')) : [];
-  return cards.map(c => ({
-    key: c.dataset.tab,
-    label: (c.querySelector('.tile-label') && c.querySelector('.tile-label').textContent) || c.dataset.tab
-  }));
-}
-
 // getSectionMeta() reads the live DOM order, which applySettings() reorders in place —
 // so the section order must be captured once, before the first reorder ever happens,
 // or "reset to defaults" would just reapply whatever order is currently on screen.
@@ -3276,481 +2450,11 @@ let cachedDefaultSectionOrder = null;
 let cachedDefaultSeoMetaOrder = null;
 let cachedDefaultSeoPerformanceOrder = null;
 
-function getDefaultSettings() {
-  const sections = getSectionMeta('section-board');
-  if (!cachedDefaultSectionOrder) {
-    cachedDefaultSectionOrder = sections.map(s => s.key);
-  }
-  const knownKeys = sections.map(s => s.key);
-  const sectionOrder = cachedDefaultSectionOrder.filter(k => knownKeys.includes(k));
-  knownKeys.forEach(k => { if (!sectionOrder.includes(k)) sectionOrder.push(k); });
-
-  const sectionVisibility = {};
-  sections.forEach(s => { sectionVisibility[s.key] = true; });
-
-  const metaSections = getSectionMeta('seo-meta-board');
-  if (!cachedDefaultSeoMetaOrder) cachedDefaultSeoMetaOrder = metaSections.map(s => s.key);
-  const metaKnownKeys = metaSections.map(s => s.key);
-  const seoMetaOrder = cachedDefaultSeoMetaOrder.filter(k => metaKnownKeys.includes(k));
-  metaKnownKeys.forEach(k => { if (!seoMetaOrder.includes(k)) seoMetaOrder.push(k); });
-
-  const perfSections = getSectionMeta('seo-performance-board');
-  if (!cachedDefaultSeoPerformanceOrder) cachedDefaultSeoPerformanceOrder = perfSections.map(s => s.key);
-  const perfKnownKeys = perfSections.map(s => s.key);
-  const seoPerformanceOrder = cachedDefaultSeoPerformanceOrder.filter(k => perfKnownKeys.includes(k));
-  perfKnownKeys.forEach(k => { if (!seoPerformanceOrder.includes(k)) seoPerformanceOrder.push(k); });
-
-  const seoSectionVisibility = {};
-  metaSections.concat(perfSections).forEach(s => { seoSectionVisibility[s.key] = true; });
-
-  return {
-    version: SETTINGS_VERSION,
-    sectionOrder,
-    sectionVisibility,
-    defaultExpanded: null,
-    maxItemsPerGrid: DEFAULT_MAX_ITEMS_PER_GRID,
-    sectionLayout: 'list',
-    assetLayout: 'grid',
-    restoreLastSession: true,
-    seoMetaOrder,
-    seoPerformanceOrder,
-    seoSectionVisibility,
-    modernLook: false
-  };
-}
-
-function loadSettings(callback) {
-  chrome.storage.local.get([SETTINGS_STORAGE_KEY], (res) => {
-    const stored = res[SETTINGS_STORAGE_KEY];
-    const defaults = getDefaultSettings();
-    if (!stored || stored.version !== SETTINGS_VERSION) {
-      currentSettings = defaults;
-    } else {
-      const validKeys = defaults.sectionOrder;
-      const storedOrder = (stored.sectionOrder || []).filter(k => validKeys.includes(k));
-      const missing = validKeys.filter(k => !storedOrder.includes(k));
-
-      const validMetaKeys = defaults.seoMetaOrder;
-      const storedMetaOrder = (stored.seoMetaOrder || []).filter(k => validMetaKeys.includes(k));
-      const missingMeta = validMetaKeys.filter(k => !storedMetaOrder.includes(k));
-
-      const validPerfKeys = defaults.seoPerformanceOrder;
-      const storedPerfOrder = (stored.seoPerformanceOrder || []).filter(k => validPerfKeys.includes(k));
-      const missingPerf = validPerfKeys.filter(k => !storedPerfOrder.includes(k));
-
-      currentSettings = {
-        version: SETTINGS_VERSION,
-        sectionOrder: [...storedOrder, ...missing],
-        sectionVisibility: { ...defaults.sectionVisibility, ...(stored.sectionVisibility || {}) },
-        defaultExpanded: stored.defaultExpanded || null,
-        maxItemsPerGrid: stored.maxItemsPerGrid ? Math.min(stored.maxItemsPerGrid, MAX_ITEMS_PER_GRID_LIMIT) : DEFAULT_MAX_ITEMS_PER_GRID,
-        sectionLayout: stored.sectionLayout === 'grid' ? 'grid' : 'list',
-        assetLayout: stored.assetLayout === 'list' ? 'list' : 'grid',
-        restoreLastSession: stored.restoreLastSession !== false,
-        seoMetaOrder: [...storedMetaOrder, ...missingMeta],
-        seoPerformanceOrder: [...storedPerfOrder, ...missingPerf],
-        seoSectionVisibility: { ...defaults.seoSectionVisibility, ...(stored.seoSectionVisibility || {}) },
-        modernLook: stored.modernLook === true
-      };
-    }
-    callback(currentSettings);
-  });
-}
-
-function saveSettingsToStorage(settings, callback) {
-  chrome.storage.local.set({ [SETTINGS_STORAGE_KEY]: settings }, callback);
-}
-
-function applyBoardSettings(boardId, order, visibility, layout, defaultExpanded) {
-  const board = document.getElementById(boardId);
-  if (!board) return;
-
-  const expandedBeforeReorder = board.querySelector('.section-card.expanded');
-  if (expandedBeforeReorder) closeSectionTile(expandedBeforeReorder);
-
-  setBoardLayoutMode(board, layout || 'list');
-
-  order.forEach(key => {
-    const card = board.querySelector(`.section-card[data-tab="${key}"]`);
-    if (card) board.appendChild(card);
-  });
-
-  board.querySelectorAll('.section-card').forEach(card => {
-    const key = card.dataset.tab;
-    const visible = visibility[key] !== false;
-    card.classList.toggle('hidden', !visible);
-  });
-
-  if (defaultExpanded) {
-    const alreadyExpanded = board.querySelector('.section-card.expanded');
-    if (!alreadyExpanded) {
-      const target = board.querySelector(`.section-card[data-tab="${defaultExpanded}"]`);
-      if (target && !target.classList.contains('hidden')) {
-        openSectionTile(target);
-      }
-    }
-  }
-}
-
-function applySettings(settings) {
-  applyBoardSettings('section-board', settings.sectionOrder, settings.sectionVisibility, settings.sectionLayout, settings.defaultExpanded);
-  applyBoardSettings('seo-meta-board', settings.seoMetaOrder || [], settings.seoSectionVisibility || {}, settings.sectionLayout, null);
-  applyBoardSettings('seo-performance-board', settings.seoPerformanceOrder || [], settings.seoSectionVisibility || {}, settings.sectionLayout, null);
-  applyModernLook(settings.modernLook === true);
-}
-
-// "Modern Look" turns the SEO tab's Meta/Performance boards into a tabbed property
-// sheet: the tab strip reuses the same .segmented/.tag pill component used elsewhere
-// in the app (theme choice, colorblind modes, ...), just wrapping to a second line
-// when a group has more tabs than fit in one row. Via the .modern-look CSS rule, only
-// the one card with .expanded ever renders below it, so the panel's height tracks just
-// that section's content instead of the whole stacked list. openSectionTile already
-// guarantees at most one .expanded card per board, so tabs just drive that same state.
-function renderSeoPillBar(boardId, pillsId) {
-  const board = document.getElementById(boardId);
-  const pillsEl = document.getElementById(pillsId);
-  if (!board || !pillsEl) return;
-
-  const cards = Array.from(board.querySelectorAll('.section-card')).filter(c => !c.classList.contains('hidden'));
-  pillsEl.innerHTML = '';
-  if (!cards.length) {
-    // every tool in this group is hidden via Arrangement — say so instead of a
-    // silent blank panel with no pills and no card
-    pillsEl.innerHTML = '<div class="empty-state" style="padding: 4px 0;">All tools in this group are hidden — enable some in Settings › Arrangement</div>';
-    return;
-  }
-  cards.forEach((card, index) => {
-    if (index > 0) {
-      const divider = document.createElement('span');
-      divider.className = 'seo-tab-divider';
-      divider.textContent = '|';
-      divider.setAttribute('aria-hidden', 'true');
-      pillsEl.appendChild(divider);
-    }
-
-    const labelEl = card.querySelector('.tile-label');
-    const tab = document.createElement('button');
-    tab.type = 'button';
-    tab.className = 'tag';
-    tab.textContent = labelEl ? labelEl.textContent : (card.dataset.tab || '');
-    tab.dataset.key = card.dataset.tab;
-    // carry the card's own accent color (--c-meta, --c-seo-score, ...) onto its pill,
-    // so the active tab picks up that same color instead of a flat neutral highlight
-    tab.style.setProperty('--tile-accent', card.style.getPropertyValue('--tile-accent'));
-    if (card.classList.contains('expanded')) tab.classList.add('active');
-    tab.addEventListener('click', () => {
-      if (!card.classList.contains('expanded')) openSectionTile(card);
-      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-    pillsEl.appendChild(tab);
-  });
-}
-
-function syncSeoPillActiveStates(boardId, pillsId) {
-  const board = document.getElementById(boardId);
-  const pillsEl = document.getElementById(pillsId);
-  if (!board || !pillsEl) return;
-  pillsEl.querySelectorAll('.tag').forEach(tab => {
-    const card = board.querySelector(`.section-card[data-tab="${tab.dataset.key}"]`);
-    tab.classList.toggle('active', !!(card && card.classList.contains('expanded')));
-  });
-}
-
-function renderAllSeoPillBars() {
-  renderSeoPillBar('seo-meta-board', 'seo-meta-pills');
-  renderSeoPillBar('seo-performance-board', 'seo-performance-pills');
-}
-
-// True for a card that is the ONLY thing Modern Look renders in its board right now —
-// closing it via its own header (rather than switching tabs) would leave a blank panel
-// with nothing to fall back to.
-function isSoleModernLookCard(card) {
-  const seoPanel = document.getElementById('tab-panel-seo');
-  if (!seoPanel || !seoPanel.classList.contains('modern-look')) return false;
-  const board = card.closest('.section-board');
-  return !!(board && (board.id === 'seo-meta-board' || board.id === 'seo-performance-board'));
-}
-
-// Turning Modern Look on needs exactly one visible card expanded so the tab strip
-// never lands on a blank panel. This runs from applySettings — long before the SEO
-// tab is ever shown or the page has been scanned — so it must NOT go through
-// openSectionTile/expandCardBody: those measure scrollHeight, which reads 0 on a
-// display:none ancestor and would permanently wedge the body at 0px. Setting
-// height:auto directly sidesteps that; a real (visible, scanned) pill click later
-// still goes through the normal measured-height path.
-function ensureModernActiveCard(boardId) {
-  const board = document.getElementById(boardId);
-  if (!board) return;
-  const visibleCards = Array.from(board.querySelectorAll('.section-card')).filter(c => !c.classList.contains('hidden'));
-  if (!visibleCards.length) return;
-  if (visibleCards.some(c => c.classList.contains('expanded'))) return;
-
-  const card = visibleCards[0];
-  const body = getCardBodyEl(card);
-  card.classList.add('expanded');
-  if (body) {
-    body.dataset.ownerTab = card.dataset.tab;
-    body.style.height = 'auto';
-  }
-}
-
 // Modern Look shows one whole group (Meta or Performance) at a time, picked via the
 // small "Meta | Performance" switcher above them — so the two never require scrolling
 // past one to reach the other. Only meaningful while Modern Look is on; when it's off
 // both groups are just the plain stacked list and are always shown together.
 let activeSeoGroup = 'meta';
-
-function showSeoGroup(group) {
-  activeSeoGroup = group === 'performance' ? 'performance' : 'meta';
-  const metaPanel = document.getElementById('seo-group-meta');
-  const perfPanel = document.getElementById('seo-group-performance');
-  if (metaPanel) metaPanel.classList.toggle('hidden', activeSeoGroup !== 'meta');
-  if (perfPanel) perfPanel.classList.toggle('hidden', activeSeoGroup !== 'performance');
-
-  const toggle = document.getElementById('seo-group-toggle');
-  if (toggle) {
-    toggle.querySelectorAll('.tag').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.group === activeSeoGroup);
-    });
-  }
-}
-
-function setupSeoGroupToggle() {
-  const toggle = document.getElementById('seo-group-toggle');
-  if (!toggle) return;
-  toggle.querySelectorAll('.tag').forEach(btn => {
-    btn.addEventListener('click', () => showSeoGroup(btn.dataset.group));
-  });
-}
-
-function applyModernLook(enabled) {
-  const seoPanel = document.getElementById('tab-panel-seo');
-  if (seoPanel) seoPanel.classList.toggle('modern-look', !!enabled);
-
-  const metaPills = document.getElementById('seo-meta-pills');
-  const perfPills = document.getElementById('seo-performance-pills');
-  if (metaPills) metaPills.classList.toggle('hidden', !enabled);
-  if (perfPills) perfPills.classList.toggle('hidden', !enabled);
-
-  const groupToggle = document.getElementById('seo-group-toggle');
-  const groupDivider = document.getElementById('seo-group-toggle-divider');
-  if (groupToggle) groupToggle.classList.toggle('hidden', !enabled);
-  if (groupDivider) groupDivider.classList.toggle('hidden', !enabled);
-
-  if (enabled) {
-    ensureModernActiveCard('seo-meta-board');
-    ensureModernActiveCard('seo-performance-board');
-    renderAllSeoPillBars();
-    showSeoGroup(activeSeoGroup);
-  } else {
-    const metaPanel = document.getElementById('seo-group-meta');
-    const perfPanel = document.getElementById('seo-group-performance');
-    if (metaPanel) metaPanel.classList.remove('hidden');
-    if (perfPanel) perfPanel.classList.remove('hidden');
-  }
-}
-
-// shared by the Tools "Sections" list and the SEO tab's Meta/Performance lists —
-// same drag-to-reorder + show/hide row markup, just pointed at a different order/visibility source
-function renderSectionListRows(listEl, order, visibilityMap, sectionLabels) {
-  if (!listEl) return;
-  listEl.innerHTML = '';
-  let draggedRow = null;
-
-  order.forEach((key) => {
-    const sourceCard = document.querySelector(`.section-card[data-tab="${key}"]`);
-    const iconHtml = sourceCard ? sourceCard.querySelector('.tile-icon-wrap').outerHTML : '';
-    const accentStyle = sourceCard ? sourceCard.getAttribute('style') || '' : '';
-
-    const row = document.createElement('div');
-    row.className = 'settings-row';
-    row.dataset.key = key;
-    row.draggable = true;
-    if (accentStyle) row.style.cssText = accentStyle;
-    row.innerHTML = `
-      <span class="settings-row-drag" title="Drag to reorder">
-        <svg viewBox="0 0 24 24" fill="currentColor">
-          <circle cx="8" cy="5" r="1.5"></circle><circle cx="8" cy="12" r="1.5"></circle><circle cx="8" cy="19" r="1.5"></circle>
-          <circle cx="16" cy="5" r="1.5"></circle><circle cx="16" cy="12" r="1.5"></circle><circle cx="16" cy="19" r="1.5"></circle>
-        </svg>
-      </span>
-      ${iconHtml}
-      <span class="settings-row-label"></span>
-      <label class="switch">
-        <input type="checkbox" class="settings-row-visible">
-        <span class="switch-track"></span>
-      </label>
-    `;
-    row.querySelector('.settings-row-visible').checked = visibilityMap[key] !== false;
-    row.querySelector('.settings-row-label').textContent = sectionLabels[key] || key;
-
-    row.addEventListener('dragstart', (e) => {
-      draggedRow = row;
-      row.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', key);
-    });
-    row.addEventListener('dragend', () => {
-      row.classList.remove('dragging');
-      draggedRow = null;
-    });
-    row.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      if (!draggedRow || draggedRow === row) return;
-      const rect = row.getBoundingClientRect();
-      const before = (e.clientY - rect.top) < rect.height / 2;
-      listEl.insertBefore(draggedRow, before ? row : row.nextSibling);
-    });
-
-    listEl.appendChild(row);
-  });
-
-  listEl.addEventListener('dragover', (e) => e.preventDefault());
-  listEl.addEventListener('drop', (e) => e.preventDefault());
-}
-
-function readSectionListRows(listEl) {
-  const rows = listEl ? Array.from(listEl.querySelectorAll('.settings-row')) : [];
-  const order = rows.map(r => r.dataset.key);
-  const visibility = {};
-  rows.forEach(r => { visibility[r.dataset.key] = r.querySelector('.settings-row-visible').checked; });
-  return { order, visibility };
-}
-
-function renderSettingsForm(settings) {
-  const sectionLabels = {};
-  getSectionMeta('section-board').forEach(s => { sectionLabels[s.key] = s.label; });
-  renderSectionListRows(document.getElementById('settings-section-list'), settings.sectionOrder, settings.sectionVisibility, sectionLabels);
-
-  const seoLabels = {};
-  getSectionMeta('seo-meta-board').forEach(s => { seoLabels[s.key] = s.label; });
-  getSectionMeta('seo-performance-board').forEach(s => { seoLabels[s.key] = s.label; });
-  renderSectionListRows(document.getElementById('settings-seo-meta-list'), settings.seoMetaOrder || [], settings.seoSectionVisibility || {}, seoLabels);
-  renderSectionListRows(document.getElementById('settings-seo-performance-list'), settings.seoPerformanceOrder || [], settings.seoSectionVisibility || {}, seoLabels);
-
-  const defaultSelect = document.getElementById('settings-default-section');
-  if (defaultSelect) {
-    defaultSelect.innerHTML = '<option value="">None</option>';
-    settings.sectionOrder.forEach(key => {
-      const opt = document.createElement('option');
-      opt.value = key;
-      opt.textContent = sectionLabels[key] || key;
-      if (key === settings.defaultExpanded) opt.selected = true;
-      defaultSelect.appendChild(opt);
-    });
-  }
-
-  const maxItemsInput = document.getElementById('settings-max-items');
-  if (maxItemsInput) maxItemsInput.value = settings.maxItemsPerGrid;
-
-  const sectionGridToggle = document.getElementById('settings-section-grid-toggle');
-  if (sectionGridToggle) sectionGridToggle.checked = (settings.sectionLayout || 'list') === 'grid';
-
-  const modernLookToggle = document.getElementById('settings-modern-look-toggle');
-  if (modernLookToggle) modernLookToggle.checked = settings.modernLook === true;
-
-  const assetListToggle = document.getElementById('settings-asset-list-toggle');
-  if (assetListToggle) assetListToggle.checked = (settings.assetLayout || 'grid') === 'list';
-
-  const restoreSessionToggle = document.getElementById('settings-restore-session-toggle');
-  if (restoreSessionToggle) restoreSessionToggle.checked = settings.restoreLastSession !== false;
-}
-
-function readSettingsForm() {
-  const { order: sectionOrder, visibility: sectionVisibility } = readSectionListRows(document.getElementById('settings-section-list'));
-
-  const metaList = readSectionListRows(document.getElementById('settings-seo-meta-list'));
-  const perfList = readSectionListRows(document.getElementById('settings-seo-performance-list'));
-  const seoSectionVisibility = { ...metaList.visibility, ...perfList.visibility };
-
-  const defaultSelect = document.getElementById('settings-default-section');
-  const maxItemsInput = document.getElementById('settings-max-items');
-  const maxItems = maxItemsInput ? parseInt(maxItemsInput.value, 10) : DEFAULT_MAX_ITEMS_PER_GRID;
-
-  const sectionGridToggle = document.getElementById('settings-section-grid-toggle');
-  const modernLookToggle = document.getElementById('settings-modern-look-toggle');
-  const assetListToggle = document.getElementById('settings-asset-list-toggle');
-  const restoreSessionToggle = document.getElementById('settings-restore-session-toggle');
-
-  return {
-    version: SETTINGS_VERSION,
-    sectionOrder,
-    sectionVisibility,
-    defaultExpanded: defaultSelect && defaultSelect.value ? defaultSelect.value : null,
-    maxItemsPerGrid: (Number.isFinite(maxItems) && maxItems > 0) ? Math.min(maxItems, MAX_ITEMS_PER_GRID_LIMIT) : DEFAULT_MAX_ITEMS_PER_GRID,
-    sectionLayout: (sectionGridToggle && sectionGridToggle.checked) ? 'grid' : 'list',
-    assetLayout: (assetListToggle && assetListToggle.checked) ? 'list' : 'grid',
-    restoreLastSession: !restoreSessionToggle || restoreSessionToggle.checked,
-    seoMetaOrder: metaList.order,
-    seoPerformanceOrder: perfList.order,
-    seoSectionVisibility,
-    modernLook: !!(modernLookToggle && modernLookToggle.checked)
-  };
-}
-
-// settings save
-function setupSettingsPanel() {
-  const saveBtn = document.getElementById('settings-save-btn');
-  const resetBtn = document.getElementById('settings-reset-btn');
-
-  // These two toggles live outside the collapsible "Settings" section, so they
-  // save themselves immediately instead of waiting on the Save Settings button.
-  const restoreSessionToggle = document.getElementById('settings-restore-session-toggle');
-  if (restoreSessionToggle) {
-    restoreSessionToggle.addEventListener('change', () => {
-      const settings = { ...(currentSettings || getDefaultSettings()), restoreLastSession: restoreSessionToggle.checked };
-      currentSettings = settings;
-      saveSettingsToStorage(settings);
-    });
-  }
-
-  const sectionGridToggle = document.getElementById('settings-section-grid-toggle');
-  if (sectionGridToggle) {
-    sectionGridToggle.addEventListener('change', () => {
-      const settings = { ...(currentSettings || getDefaultSettings()), sectionLayout: sectionGridToggle.checked ? 'grid' : 'list' };
-      currentSettings = settings;
-      setSectionLayoutMode(settings.sectionLayout);
-      setBoardLayoutMode(document.getElementById('seo-meta-board'), settings.sectionLayout);
-      setBoardLayoutMode(document.getElementById('seo-performance-board'), settings.sectionLayout);
-      saveSettingsToStorage(settings);
-    });
-  }
-
-  const modernLookToggle = document.getElementById('settings-modern-look-toggle');
-  if (modernLookToggle) {
-    modernLookToggle.addEventListener('change', () => {
-      const settings = { ...(currentSettings || getDefaultSettings()), modernLook: modernLookToggle.checked };
-      currentSettings = settings;
-      applyModernLook(settings.modernLook);
-      saveSettingsToStorage(settings);
-    });
-  }
-
-  if (resetBtn) {
-    resetBtn.addEventListener('click', () => {
-      const settings = getDefaultSettings();
-      renderSettingsForm(settings);
-      saveSettingsToStorage(settings, () => {
-        currentSettings = settings;
-        applySettings(settings);
-        showToast('Settings reset to defaults');
-        if (lastExtractedData) renderData(lastExtractedData, lastActiveTabId);
-      });
-    });
-  }
-
-  if (saveBtn) {
-    saveBtn.addEventListener('click', () => {
-      const settings = readSettingsForm();
-      saveSettingsToStorage(settings, () => {
-        currentSettings = settings;
-        applySettings(settings);
-        showToast('Settings saved');
-        if (lastExtractedData) renderData(lastExtractedData, lastActiveTabId);
-      });
-    });
-  }
-}
 
 function sendInspectMessage(tabId, action, onError) {
   if (!tabId) return;
@@ -4536,14 +3240,15 @@ function setupInspectPanel() {
 // color palette
 function identifyPrimaryBrandColor(data) {
   const candidates = [...(data.colors || []), ...(data.bgColors || [])];
-  let best = null, bestScore = -1;
+  let best = null, bestScore = -1, fallbackLink = null;
   candidates.forEach(c => {
     const hsl = hexToHsl(c.hex);
     if (!hsl) return;
+    if (String(c.hex).toUpperCase() === '#0000EE') { fallbackLink = c.hex; return; }
     if (hsl.s < 15 || hsl.l < 8 || hsl.l > 92) return;
     if (hsl.s > bestScore) { bestScore = hsl.s; best = c.hex; }
   });
-  return best || (candidates[0] && candidates[0].hex) || '#EA580C';
+  return best || fallbackLink || (candidates[0] && candidates[0].hex) || '#EA580C';
 }
 
 function generateMonochromaticPalette(baseHsl) {
@@ -5267,53 +3972,6 @@ function renderTokenTagList(containerId, entries) {
   } else {
     container.innerHTML = '<div class="empty-state">None detected</div>';
   }
-}
-
-function buildStarterKit(data, format) {
-  const uniqueColors = [];
-  const seenStarterKitColorHexes = new Set();
-  [...(data.colors || []), ...(data.bgColors || [])].forEach(c => {
-    if (!seenStarterKitColorHexes.has(c.hex)) {
-      seenStarterKitColorHexes.add(c.hex);
-      uniqueColors.push(c);
-    }
-  });
-  const uniqueFonts = data.fonts && data.fonts.length
-    ? [...new Set(data.fonts.map(f => f.split(',')[0].replace(/['"]/g, '').trim()).filter(Boolean))]
-    : [];
-  const tokens = data.designTokens || { paddings: [], radii: [], shadows: [] };
-  const spacing = (tokens.paddings || []).map(t => t.value);
-  const radii = (tokens.radii || []).map(t => t.value);
-  const shadows = (tokens.shadows || []).map(t => t.value);
-
-  if (format === 'css') {
-    const lines = [':root {'];
-    uniqueColors.forEach((c, i) => lines.push(`  --color-${i + 1}: ${c.hex};`));
-    uniqueFonts.forEach((f, i) => lines.push(`  --font-${i + 1}: '${f}';`));
-    spacing.forEach((s, i) => lines.push(`  --space-${i + 1}: ${s};`));
-    radii.forEach((r, i) => lines.push(`  --radius-${i + 1}: ${r};`));
-    lines.push('}');
-    return { text: lines.join('\n'), ext: 'css' };
-  }
-
-  if (format === 'figma') {
-    const obj = { color: {}, font: {}, spacing: {}, borderRadius: {} };
-    uniqueColors.forEach((c, i) => { obj.color[`color-${i + 1}`] = { value: c.hex, type: 'color' }; });
-    uniqueFonts.forEach((f, i) => { obj.font[`font-${i + 1}`] = { value: f, type: 'fontFamily' }; });
-    spacing.forEach((s, i) => { obj.spacing[`space-${i + 1}`] = { value: s, type: 'spacing' }; });
-    radii.forEach((r, i) => { obj.borderRadius[`radius-${i + 1}`] = { value: r, type: 'borderRadius' }; });
-    return { text: JSON.stringify(obj, null, 2), ext: 'json' };
-  }
-
-  // Default: Tailwind config
-  const colorEntries = uniqueColors.map((c, i) => `        'color-${i + 1}': '${c.hex}',`).join('\n');
-  const fontEntries = uniqueFonts.map((f, i) => `        'font-${i + 1}': ['${f}', 'sans-serif'],`).join('\n');
-  const spacingEntries = spacing.map((s, i) => `        'space-${i + 1}': '${s}',`).join('\n');
-  const radiusEntries = radii.map((r, i) => `        'radius-${i + 1}': '${r}',`).join('\n');
-  return {
-    text: `module.exports = {\n  theme: {\n    extend: {\n      colors: {\n${colorEntries}\n      },\n      fontFamily: {\n${fontEntries}\n      },\n      spacing: {\n${spacingEntries}\n      },\n      borderRadius: {\n${radiusEntries}\n      }\n    }\n  }\n}`,
-    ext: 'js'
-  };
 }
 
 function renderDesignTokens(data) {
@@ -6232,367 +4890,6 @@ function computeDesignConsistencyScore(data) {
 
   const overall = Math.round((colorScore + fontScore + spacingScore) / 3);
   return { overall, colorScore, fontScore, spacingScore, colorCount, fontCount };
-}
-
-function renderVibeStrip(data) {
-  const vibeTextEl = document.getElementById('vibe-text');
-  const badgeEl = document.getElementById('consistency-badge');
-  if (vibeTextEl) vibeTextEl.textContent = computeSiteVibe(data);
-  if (badgeEl) {
-    const consistency = computeDesignConsistencyScore(data);
-    const tierColor = consistency.overall >= 80 ? 'var(--success)' : consistency.overall >= 50 ? '#d97706' : 'var(--danger)';
-    badgeEl.style.color = tierColor;
-    badgeEl.style.background = `color-mix(in srgb, ${tierColor} 16%, transparent)`;
-    badgeEl.textContent = `${consistency.overall} consistency`;
-  }
-}
-
-// dashboard
-function tierColorFor(score) {
-  if (score == null) return 'var(--text-tertiary)';
-  return score >= 80 ? 'var(--success)' : score >= 50 ? '#d97706' : 'var(--danger)';
-}
-
-function tierClassFor(score) {
-  if (score == null) return 'tier-unknown';
-  return score >= 80 ? 'tier-good' : score >= 50 ? 'tier-warn' : 'tier-critical';
-}
-
-const DASHBOARD_RING_ICONS = {
-  'consistency': '<circle cx="13.5" cy="6.5" r="0.5"></circle><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.4-.3-.4-.5-.9-.5-1.4 0-1.1.9-2 2-2h2.4c2.3 0 4.1-1.8 4.1-4.1C21.5 6 17.2 2 12 2z"></path>',
-  'llm-visibility': '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>',
-  'accessibility': '<circle cx="12" cy="4" r="1.5"></circle><path d="M4 8l8 2 8-2M12 10v5m0 0l-3 7m3-7l3 7"></path>',
-  'performance': '<polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polyline>',
-  'dark-patterns': '<path d="M12 9v4"></path><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L14.71 3.86a2 2 0 0 0-3.42 0Z"></path><path d="M12 17h.01"></path>'
-};
-
-const DASHBOARD_RING_CIRCUMFERENCE = 2 * Math.PI * 28;
-
-function buildRingHtml(key, label, score) {
-  const color = tierColorFor(score);
-  const pct = score == null ? 0 : Math.max(0, Math.min(100, score));
-  const targetOffset = DASHBOARD_RING_CIRCUMFERENCE * (1 - pct / 100);
-  const iconPaths = DASHBOARD_RING_ICONS[key] || '';
-  const iconHtml = iconPaths
-    ? `<span class="dashboard-ring-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${iconPaths}</svg></span>`
-    : '';
-  return `
-    <button class="dashboard-ring ${tierClassFor(score)}" data-ring-key="${key}" type="button" style="--ring-color:${color};">
-      ${iconHtml}
-      <div class="dashboard-ring-svg-wrap">
-        <svg class="dashboard-ring-svg" viewBox="0 0 64 64">
-          <circle cx="32" cy="32" r="28" class="dashboard-ring-track"></circle>
-          <circle cx="32" cy="32" r="28" class="dashboard-ring-progress" data-offset="${targetOffset}"
-            style="stroke:${color}; stroke-dasharray:${DASHBOARD_RING_CIRCUMFERENCE}; stroke-dashoffset:${DASHBOARD_RING_CIRCUMFERENCE};"></circle>
-        </svg>
-        <div class="dashboard-ring-value" style="color:${color};" data-count-target="${score == null ? '' : score}">${score == null ? '—' : '0'}</div>
-      </div>
-      <div class="dashboard-ring-label">${escapeHtml(label)}</div>
-    </button>
-  `;
-}
-
-const DASHBOARD_HERO_RING_CIRCUMFERENCE = 2 * Math.PI * 36;
-
-function buildHeroHtml(seoRes) {
-  const color = tierColorFor(seoRes.score);
-  const pct = Math.max(0, Math.min(100, seoRes.score));
-  const targetOffset = DASHBOARD_HERO_RING_CIRCUMFERENCE * (1 - pct / 100);
-  const tierLabel = seoRes.score >= 80 ? 'Looking good' : seoRes.score >= 50 ? 'Needs some work' : 'Needs attention';
-
-  const allFailing = seoRes.checks.filter(c => !c.pass);
-  const shownFailing = allFailing.slice(0, 3);
-  const moreCount = allFailing.length - shownFailing.length;
-
-  const issuesHtml = shownFailing.length
-    ? shownFailing.map(c => `
-        <div class="dashboard-hero-issue">
-          <span class="dashboard-hero-issue-dot"></span>${escapeHtml(c.label)}
-        </div>
-      `).join('') + (moreCount > 0 ? `<div class="dashboard-hero-issue-more">+${moreCount} more</div>` : '')
-    : `<div class="dashboard-hero-issue dashboard-hero-issue-ok"><span class="dashboard-hero-issue-dot"></span>All checks passing</div>`;
-
-  return `
-    <button class="dashboard-hero ${tierClassFor(seoRes.score)}" id="dashboard-hero-btn" type="button" style="--ring-color:${color};">
-      <div class="dashboard-hero-ring-wrap">
-        <svg class="dashboard-hero-ring-svg" viewBox="0 0 84 84">
-          <circle cx="42" cy="42" r="36" class="dashboard-ring-track"></circle>
-          <circle cx="42" cy="42" r="36" class="dashboard-ring-progress" data-offset="${targetOffset}"
-            style="stroke:${color}; stroke-width:7; stroke-dasharray:${DASHBOARD_HERO_RING_CIRCUMFERENCE}; stroke-dashoffset:${DASHBOARD_HERO_RING_CIRCUMFERENCE};"></circle>
-        </svg>
-        <div class="dashboard-hero-value" style="color:${color};" data-count-target="${seoRes.score}">0</div>
-      </div>
-      <div class="dashboard-hero-text">
-        <div class="dashboard-hero-title">SEO Health — ${escapeHtml(tierLabel)}</div>
-        <div class="dashboard-hero-desc">${seoRes.passCount} of ${seoRes.checks.length} checks passed. Tap for the full checklist.</div>
-        <div class="dashboard-hero-issues">${issuesHtml}</div>
-      </div>
-    </button>
-  `;
-}
-
-const DASHBOARD_STAT_ICONS = {
-  fonts: '<polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line>',
-  colors: '<circle cx="13.5" cy="6.5" r="0.5"></circle><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.4-.3-.4-.5-.9-.5-1.4 0-1.1.9-2 2-2h2.4c2.3 0 4.1-1.8 4.1-4.1C21.5 6 17.2 2 12 2z"></path>',
-  outline: '<line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line>',
-  backlinks: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>',
-  assets: '<rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline>',
-  'tech-stack': '<rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line>',
-  wordcount: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line>',
-  'structured-data': '<polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline>',
-  'dark-patterns': '<path d="M12 9v4"></path><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L14.71 3.86a2 2 0 0 0-3.42 0Z"></path><path d="M12 17h.01"></path>'
-};
-
-function buildQuickStatsHtml(data, consistency) {
-  const stats = [
-    { key: 'fonts', section: 'typography', label: 'Fonts', value: consistency.fontCount },
-    { key: 'colors', section: 'colors', label: 'Colors', value: consistency.colorCount },
-    { key: 'outline', section: 'outline', label: 'Headings', value: (data.outline || []).length },
-    { key: 'backlinks', section: 'backlinks', label: 'Links', value: (data.links || []).length },
-    { key: 'assets', section: 'assets', label: 'Images', value: (data.images || []).length },
-    { key: 'tech-stack', section: 'tech-stack', label: 'Tech Detected', value: (data.techStack || []).length },
-    { key: 'wordcount', section: 'meta', label: 'Words', value: (data.meta && data.meta.wordCount) || 0 },
-    { key: 'structured-data', section: 'structured-data', label: 'Schema Types', value: ((data.structuredData && data.structuredData.types) || []).length },
-    { key: 'dark-patterns', section: 'dark-patterns', label: 'Dark Patterns', value: countDarkPatternInstances(data) }
-  ];
-  return stats.map(s => `
-    <button class="dashboard-stat-chip" data-stat-section="${s.section}" type="button">
-      <span class="dashboard-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${DASHBOARD_STAT_ICONS[s.key] || ''}</svg></span>
-      <span class="dashboard-stat-value" data-count-target="${s.value}">0</span>
-      <span class="dashboard-stat-label">${escapeHtml(s.label)}</span>
-    </button>
-  `).join('');
-}
-
-function computeIssueRollup(data, siteFilesResult, precomputed) {
-  const seoRes = (precomputed && precomputed.seoRes) || computeSeoChecklist(data);
-  const llmRes = (precomputed && precomputed.llmRes) || computeLlmVisibilityChecklist(data, siteFilesResult);
-  const a11yRes = (precomputed && precomputed.a11yRes) || computeA11yScore(data);
-  const dpRes = (precomputed && precomputed.dpRes) || computeDarkPatternChecklist(data);
-
-  let passed = 0, critical = 0, warning = 0;
-  [seoRes, llmRes, a11yRes, dpRes].forEach(res => {
-    passed += res.passCount;
-    critical += (res.checks.length - res.passCount);
-  });
-
-  if (lastContrastResult) {
-    passed += lastContrastResult.passing;
-    warning += lastContrastResult.failing.length;
-  }
-
-  return { passed, warning, critical, total: passed + warning + critical };
-}
-
-function renderDashboardBreakdown(rollup, instant) {
-  const el = document.getElementById('dashboard-breakdown');
-  if (!el) return;
-  if (!rollup.total) {
-    el.innerHTML = '<div class="empty-state">No checks available yet</div>';
-    return;
-  }
-  const pct = n => (n / rollup.total) * 100;
-  el.innerHTML = `
-    <div class="dashboard-breakdown-bar">
-      ${rollup.passed ? `<div class="dashboard-breakdown-segment" data-target-width="${pct(rollup.passed)}" style="width:0%; background:var(--success);" title="Passed: ${rollup.passed}"></div>` : ''}
-      ${rollup.warning ? `<div class="dashboard-breakdown-segment" data-target-width="${pct(rollup.warning)}" style="width:0%; background:#d97706;" title="Warnings: ${rollup.warning}"></div>` : ''}
-      ${rollup.critical ? `<div class="dashboard-breakdown-segment" data-target-width="${pct(rollup.critical)}" style="width:0%; background:var(--danger);" title="Critical: ${rollup.critical}"></div>` : ''}
-    </div>
-    <div class="dashboard-breakdown-legend">
-      <span><span class="dashboard-legend-dot" style="background:var(--success);"></span>Passed (${rollup.passed})</span>
-      <span><span class="dashboard-legend-dot" style="background:#d97706;"></span>Warnings (${rollup.warning})</span>
-      <span><span class="dashboard-legend-dot" style="background:var(--danger);"></span>Critical (${rollup.critical})</span>
-    </div>
-    ${!lastContrastResult ? '<div class="dashboard-breakdown-hint">Run the Contrast Check in Colors for a fuller picture.</div>' : ''}
-  `;
-  animateDashboardBreakdownFill(el, instant);
-}
-
-function refreshDashboardBreakdown(data, siteFilesResult, instant, precomputed) {
-  renderDashboardBreakdown(computeIssueRollup(data, siteFilesResult != null ? siteFilesResult : lastSiteFilesResult, precomputed), instant);
-}
-
-function showConsistencyPopover(anchorBtn, consistency) {
-  const popover = document.getElementById('consistency-popover');
-  const wrap = document.querySelector('#tab-panel-overview .dashboard-content');
-  if (!popover || !wrap) return;
-
-  const rows = [
-    { label: 'Colors', score: consistency.colorScore, detail: `${consistency.colorCount} distinct colors` },
-    { label: 'Fonts', score: consistency.fontScore, detail: `${consistency.fontCount} distinct font families` },
-    { label: 'Spacing', score: consistency.spacingScore, detail: 'Concentration of margin/padding values' }
-  ];
-
-  popover.innerHTML = `
-    <div class="dashboard-popover-title">Design Consistency Breakdown</div>
-    ${rows.map(r => `
-      <div class="dashboard-popover-row">
-        <span class="dashboard-popover-row-label">${escapeHtml(r.label)}</span>
-        <span class="dashboard-popover-row-score" style="color:${tierColorFor(r.score)};">${r.score}</span>
-      </div>
-      <div class="dashboard-popover-row-detail">${escapeHtml(r.detail)}</div>
-    `).join('')}
-  `;
-
-  const rect = anchorBtn.getBoundingClientRect();
-  const wrapRect = wrap.getBoundingClientRect();
-  popover.style.top = (rect.bottom - wrapRect.top + 6) + 'px';
-  popover.style.left = Math.max(0, rect.left - wrapRect.left - 20) + 'px';
-  popover.classList.remove('hidden');
-
-  const closeHandler = (e) => {
-    if (!popover.contains(e.target) && !anchorBtn.contains(e.target)) closePopover();
-  };
-  const escHandler = (e) => { if (e.key === 'Escape') closePopover(); };
-  function closePopover() {
-    popover.classList.add('hidden');
-    document.removeEventListener('click', closeHandler, true);
-    document.removeEventListener('keydown', escHandler);
-  }
-  setTimeout(() => {
-    document.addEventListener('click', closeHandler, true);
-    document.addEventListener('keydown', escHandler);
-  }, 0);
-}
-
-function animateCountUp(el, target, duration) {
-  const token = (el._countUpToken = (el._countUpToken || 0) + 1);
-  const startTime = performance.now();
-  function tick(now) {
-    if (el._countUpToken !== token) return;
-    const progress = Math.min(1, (now - startTime) / duration);
-    const eased = 1 - Math.pow(1 - progress, 3);
-    el.textContent = Math.round(target * eased);
-    if (progress < 1) requestAnimationFrame(tick);
-  }
-  requestAnimationFrame(tick);
-}
-
-function animateDashboardBreakdownFill(container, instant) {
-  const segments = container.querySelectorAll('.dashboard-breakdown-segment[data-target-width]');
-  if (!segments.length) return;
-  const reduceMotion = instant || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-  if (reduceMotion) {
-    segments.forEach(seg => { seg.style.width = seg.dataset.targetWidth + '%'; });
-    return;
-  }
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      segments.forEach(seg => { seg.style.width = seg.dataset.targetWidth + '%'; });
-    });
-  });
-}
-
-function animateDashboardEntrance() {
-  const overview = document.getElementById('tab-panel-overview');
-  if (!overview) return;
-  const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-  const circles = overview.querySelectorAll('.dashboard-ring-progress[data-offset]');
-  if (reduceMotion) {
-    circles.forEach(c => { c.style.strokeDashoffset = c.dataset.offset; });
-  } else {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        circles.forEach(c => { c.style.strokeDashoffset = c.dataset.offset; });
-      });
-    });
-  }
-
-  overview.querySelectorAll('[data-count-target]').forEach(el => {
-    const raw = el.dataset.countTarget;
-    if (raw === '') { el.textContent = '—'; return; }
-    const target = parseInt(raw, 10);
-    if (reduceMotion) { el.textContent = target; return; }
-    animateCountUp(el, target, 700);
-  });
-}
-
-function renderDashboard(data, siteFilesResult, isUpdate) {
-  const heroEl = document.getElementById('dashboard-hero');
-  const ringsEl = document.getElementById('dashboard-rings');
-  const statsEl = document.getElementById('dashboard-quick-stats');
-  if (!ringsEl) return;
-
-  const seoRes = computeSeoChecklist(data);
-  const llmRes = computeLlmVisibilityChecklist(data, siteFilesResult);
-  const a11yRes = computeA11yScore(data);
-  const dpRes = computeDarkPatternChecklist(data);
-
-  if (isUpdate) {
-    updateLlmVisibilityRing(llmRes.score);
-  } else {
-    const consistency = computeDesignConsistencyScore(data);
-    const perfRes = computePerformanceScore(data);
-
-    if (heroEl) {
-      heroEl.innerHTML = buildHeroHtml(seoRes);
-      const heroBtn = document.getElementById('dashboard-hero-btn');
-      if (heroBtn) heroBtn.addEventListener('click', () => jumpToToolsSection('seo-score'));
-    }
-
-    const rings = [
-      { key: 'consistency', label: 'Design Consistency', score: consistency.overall },
-      { key: 'llm-visibility', label: 'LLM Visibility', score: llmRes.score },
-      { key: 'accessibility', label: 'Accessibility', score: a11yRes.score },
-      { key: 'performance', label: 'Performance', score: perfRes ? perfRes.score : null },
-      { key: 'dark-patterns', label: 'Dark Patterns', score: dpRes.score }
-    ];
-
-    ringsEl.innerHTML = rings.map(r => buildRingHtml(r.key, r.label, r.score)).join('');
-    ringsEl.querySelectorAll('.dashboard-ring').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const key = btn.dataset.ringKey;
-        if (key === 'consistency') { showConsistencyPopover(btn, consistency); return; }
-        jumpToToolsSection(key);
-      });
-    });
-
-    if (statsEl) {
-      statsEl.innerHTML = buildQuickStatsHtml(data, consistency);
-      statsEl.querySelectorAll('.dashboard-stat-chip').forEach(btn => {
-        btn.addEventListener('click', () => jumpToToolsSection(btn.dataset.statSection));
-      });
-    }
-
-    const subtitleEl = document.getElementById('dashboard-subtitle');
-    if (subtitleEl) {
-      const pageUrl = (data.meta && (data.meta.pageUrl || data.meta.canonical)) || '';
-      subtitleEl.textContent = pageUrl ? `Snapshot of ${pageUrl}` : 'Snapshot for this page';
-      subtitleEl.title = pageUrl;
-    }
-  }
-
-  refreshDashboardBreakdown(data, siteFilesResult, isUpdate, { seoRes, llmRes, a11yRes, dpRes });
-  if (!isUpdate) animateDashboardEntrance();
-}
-
-function updateLlmVisibilityRing(score) {
-  const btn = document.querySelector('#dashboard-rings .dashboard-ring[data-ring-key="llm-visibility"]');
-  if (!btn) return;
-
-  const color = tierColorFor(score);
-  const pct = score == null ? 0 : Math.max(0, Math.min(100, score));
-  const offset = DASHBOARD_RING_CIRCUMFERENCE * (1 - pct / 100);
-
-  btn.style.setProperty('--ring-color', color);
-  btn.classList.remove('tier-good', 'tier-warn', 'tier-critical', 'tier-unknown');
-  btn.classList.add(tierClassFor(score));
-
-  const circle = btn.querySelector('.dashboard-ring-progress');
-  if (circle) {
-    circle.dataset.offset = offset;
-    circle.style.stroke = color;
-    circle.style.strokeDashoffset = offset;
-  }
-
-  const valueEl = btn.querySelector('.dashboard-ring-value');
-  if (valueEl) {
-    valueEl.style.color = color;
-    valueEl.dataset.countTarget = score == null ? '' : score;
-    valueEl._countUpToken = (valueEl._countUpToken || 0) + 1;
-    valueEl.textContent = score == null ? '—' : String(score);
-  }
 }
 
 async function fetchWithTimeout(url, timeoutMs) {
