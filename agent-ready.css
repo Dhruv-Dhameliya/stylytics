@@ -1,0 +1,98 @@
+/* agent-ready.css — styles for the Agent readiness screen (agent-ui.js). Uses the panel's own tokens. */
+
+/* ---- hero ---- */
+.ar-hero { --tier: var(--text-tertiary); padding: 14px; display: flex; flex-direction: column; gap: 12px; background: linear-gradient(165deg, color-mix(in srgb, var(--tier) 11%, var(--surface-color)) 0%, var(--surface-color) 65%); }
+.ar-hero.ok { --tier: var(--success); }
+.ar-hero.warn { --tier: var(--warn); }
+.ar-hero.bad { --tier: var(--danger); }
+.ar-hero-top { display: flex; align-items: center; gap: 14px; }
+.ar-ringwrap { position: relative; width: 78px; height: 78px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; }
+.ar-ring { position: absolute; inset: 0; width: 100%; height: 100%; }
+.ar-ring-bg { fill: none; stroke: var(--surface-inset); stroke-width: 9; }
+.ar-ring-fg { fill: none; stroke: var(--tier); stroke-width: 9; stroke-linecap: round; transition: stroke-dashoffset 0.6s ease; }
+.ar-ring-v { position: relative; font-size: 24px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.ar-hero-tx { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
+.ar-eyebrow { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-secondary); }
+.ar-level { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; }
+.ar-hero-tx small { font-size: 11px; color: var(--text-secondary); }
+.ar-warn { color: var(--text-secondary); }
+
+/* the six levels as steps */
+.ar-ladder { display: flex; gap: 5px; }
+.ar-step { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.ar-step i { display: block; width: 100%; height: 6px; border-radius: 3px; background: var(--surface-inset); }
+.ar-step small { font-size: 10px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.ar-step.on i { background: var(--tier); opacity: 0.55; }
+.ar-step.cur i { opacity: 1; }
+.ar-step.cur small { color: var(--text-primary); font-weight: 600; }
+
+/* ---- site type ---- */
+.ar-prof { width: 100%; }
+.ar-var { margin-bottom: 6px; }
+
+/* ---- checks ---- */
+.ar-list { padding: 0; overflow: hidden; }
+.ar-chk + .ar-chk { border-top: 1px solid var(--border-color); }
+.ar-row { display: flex; align-items: center; gap: 9px; width: 100%; padding: 10px 12px; text-align: left; background: none; border: 0; color: inherit; font: inherit; cursor: pointer; }
+.ar-row:hover { background: var(--surface-inset); }
+.ar-ic { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--surface-inset); color: var(--text-secondary); }
+.ar-ic.ok { background: var(--badge-green-bg); color: var(--badge-green-text); }
+.ar-ic.bad { background: var(--badge-red-bg); color: var(--badge-red-text); }
+.ar-ic.warn { background: var(--badge-amber-bg); color: var(--badge-amber-text); }
+.ar-ic.info { background: var(--badge-blue-bg); color: var(--badge-blue-text); }
+.ar-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ar-tx b { font-size: 12px; font-weight: 600; }
+.ar-tx small { font-size: 11px; line-height: 1.45; color: var(--text-secondary); overflow-wrap: anywhere; }
+.ar-row .ins-chip { flex-shrink: 0; }
+
+.ar-body { display: flex; flex-direction: column; gap: 9px; padding: 2px 12px 13px 43px; font-size: 12px; animation: sh-reveal 0.2s ease both; }
+.ar-body h4 { margin: 0 0 1px; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); }
+.ar-body p { margin: 0; line-height: 1.5; overflow-wrap: anywhere; }
+.ar-body code { font-family: var(--font-mono); font-size: 10.5px; padding: 1px 4px; border-radius: 4px; background: var(--surface-inset); }
+.ar-scorednote { font-size: 10.5px !important; color: var(--text-tertiary); }
+
+/* ---- evidence ---- */
+.ar-evs { display: flex; flex-direction: column; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 7px 9px 3px; }
+.ar-evs h4 { margin-bottom: 4px; }
+.ar-ev { display: flex; align-items: flex-start; gap: 8px; padding: 5px 0; }
+.ar-ev + .ar-ev { border-top: 1px solid var(--border-color); }
+.ar-ev-st { flex-shrink: 0; min-width: 28px; padding: 1px 4px; border-radius: 4px; background: var(--surface-inset); color: var(--text-secondary); font-family: var(--font-mono); font-size: 10px; text-align: center; }
+.ar-ev-st.ok { background: var(--badge-green-bg); color: var(--badge-green-text); }
+.ar-ev-st.bad { background: var(--badge-red-bg); color: var(--badge-red-text); }
+.ar-ev-tx { display: flex; flex-direction: column; min-width: 0; }
+.ar-ev-tx b { font-size: 11px; font-weight: 600; overflow-wrap: anywhere; }
+.ar-ev-tx small { font-size: 10.5px; color: var(--text-secondary); overflow-wrap: anywhere; }
+
+/* ---- crawler access ---- */
+.ar-bots { padding: 0; }
+.ar-botbody { display: flex; flex-direction: column; gap: 10px; padding: 2px 12px 12px; }
+.ar-botk { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.ar-botk-h { flex-basis: 100%; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); }
+.ar-bot { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: 11px; font-size: 11px; background: var(--surface-inset); color: var(--text-primary); }
+.ar-bot i { width: 7px; height: 7px; border-radius: 50%; background: var(--text-tertiary); }
+.ar-bot.ok i { background: var(--success); }
+.ar-bot.bad { background: var(--badge-red-bg); color: var(--badge-red-text); }
+.ar-bot.bad i { background: var(--danger); }
+
+/* ---- llms.txt and the audit card ---- */
+.ar-llms { display: flex; align-items: center; gap: 9px; padding: 11px 12px; }
+.ar-cat { margin-bottom: 8px; }
+
+/* ---- What an AI sees ---- */
+.av-verdict { display: flex; align-items: flex-start; gap: 10px; padding: 14px; }
+.av-verdict b { display: block; font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+.av-verdict small { display: block; margin-top: 3px; font-size: 11.5px; line-height: 1.5; color: var(--text-secondary); }
+.av-views { width: 100%; margin: 4px 0 8px; }
+.av-views .tag em { font-style: normal; opacity: 0.7; margin-left: 3px; }
+.av-doc { padding: 4px 0; max-height: 60vh; overflow: auto; }
+.av-b { padding: 6px 12px; font-family: var(--font-mono); font-size: 11px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-primary); }
+.av-b + .av-b { border-top: 1px dashed var(--border-color); }
+.av-b.js { background: var(--badge-amber-bg); color: var(--badge-amber-text); box-shadow: inset 3px 0 0 var(--warn); }
+
+/* ---- technology detection status and chips ---- */
+.tx-status { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 10px; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--surface-inset); font-size: 11px; line-height: 1.45; color: var(--text-secondary); }
+.tx-status.bad { background: var(--badge-amber-bg); color: var(--badge-amber-text); }
+.tx-status button { flex-shrink: 0; padding: 3px 9px; border: 1px solid var(--border-color); border-radius: 999px; background: var(--surface-color); color: var(--text-primary); font: inherit; font-size: 10.5px; cursor: pointer; }
+.tx-status button:hover { border-color: var(--accent); color: var(--accent); }
+.tag.tag-link { cursor: pointer; }
+.tag.tag-link:hover { border-color: var(--accent); }

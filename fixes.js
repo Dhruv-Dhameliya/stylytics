@@ -292,10 +292,14 @@ const FIX_GEN = {
   },
 
   /* AI readiness */
-  'Crawler Access': () => ({
-    where: 'robots', note: 'Add only the crawlers you want. Allowing them lets answer engines read and cite the page.',
-    code: ['GPTBot', 'OAI-SearchBot', 'ChatGPT-User', 'ClaudeBot', 'PerplexityBot', 'Google-Extended'].map(b => `User-agent: ${b}\nAllow: /`).join('\n\n')
-  }),
+  'Crawler Access': () => {
+    const r = (typeof lastSiteFilesResult !== 'undefined' && lastSiteFilesResult && lastSiteFilesResult.robotsTxt) || {};
+    const bots = r.blockedAiSearch && r.blockedAiSearch.length ? r.blockedAiSearch : ['OAI-SearchBot', 'ChatGPT-User', 'Claude-SearchBot', 'Claude-User', 'PerplexityBot', 'Perplexity-User'];
+    return {
+      where: 'robots', note: 'These are the bots that build AI answers or fetch a page when someone asks. A group for a named bot overrides a wildcard Disallow. Training crawlers (GPTBot, ClaudeBot, CCBot) can stay blocked.',
+      code: bots.map(b => `User-agent: ${b}\nAllow: /`).join('\n\n')
+    };
+  },
   'Schema Depth': (d) => ({ where: 'json', code: fxScript(fxJsonLd(d, 'faq')), note: 'FAQPage fits pages that answer questions. Use the page’s real questions and answers, and check the type matches the content.' }),
   'Entity Trust': (d) => ({ where: 'json', code: fxScript(fxJsonLd(d, 'entity')), note: 'Names who is behind the page. Fill in the real name, logo and profiles.' }),
   'Freshness': () => FIX_GEN['Content was updated within the last year']()
@@ -358,18 +362,18 @@ function fixFor(label, d) {
 // every fix on a screen, grouped by where it goes, as one pasteable block
 function fixBundle(issues, host) {
   const groups = {};
-  const order = ['head', 'json', 'html', 'body', 'css', 'robots', 'headers'];
+  const order = ['head', 'json', 'html', 'body', 'css', 'robots', 'headers', 'file', 'server', 'dns'];
   issues.forEach(i => {
     if (!i.fixCode) return;
     const w = i.fixCode.where;
-    (groups[w] = groups[w] || []).push({ t: i.t, code: i.fixCode.code });
+    (groups[w] = groups[w] || []).push({ t: i.t, code: i.fixCode.code, path: i.fixCode.path });
   });
   const parts = [];
   order.forEach(w => {
     if (!groups[w]) return;
-    const open = w === 'robots' || w === 'headers' || w === 'css' ? '/* ' : '<!-- ', close = w === 'robots' || w === 'headers' || w === 'css' ? ' */' : ' -->';
+    const open = /^(robots|headers|css|server|dns)$/.test(w) ? '/* ' : '<!-- ', close = /^(robots|headers|css|server|dns)$/.test(w) ? ' */' : ' -->';
     parts.push(open + FIX_WHERE[w] + (host ? ' · ' + host : '') + close);
-    groups[w].forEach(g => parts.push(open + g.t + close + '\n' + g.code));
+    groups[w].forEach(g => parts.push(open + g.t + (g.path ? '  →  ' + g.path : '') + close + '\n' + g.code));
     parts.push('');
   });
   return parts.join('\n').trim();

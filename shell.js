@@ -183,19 +183,22 @@ function shAudit() {
   const perf = computePerformanceScore(d);
 
   const imgChecks = insImageChecks(d), readChecks = insReadabilityChecks(d), freshChecks = insFreshnessChecks(d), schemaChecks = sdChecks(d), linkChecks = lnkChecks(d), secChecks = hdrChecks(d), perfChecks = tpChecks(d).concat(fontChecks(d));
+  // the AI-search, agent-protocol and technical-SEO checks; a failure in any of them must not break the audit
+  const safe = (fn) => { try { return fn(d) || []; } catch (e) { return []; } };
+  const geoChecks = safe(arGeoChecks), agentChecks = safe(arAgentChecks), techSeoChecks = safe(arSeoChecks);
   const designChecks = [
     { label: 'Color palette is compact', pass: cons.colorScore >= 80, line: `${cons.colorCount} distinct colors are in use.` },
     { label: 'Few font families', pass: cons.fontScore >= 80, line: `${cons.fontCount} font families are in use.` },
     { label: 'Spacing follows a consistent scale', pass: cons.spacingScore >= 70, line: 'Many one-off margin and padding values are in use.' }
   ];
   const raw = {
-    seo: { score: insBlend(seo.score, readChecks.concat(freshChecks, schemaChecks), 0.15), checks: seo.checks.concat(readChecks, freshChecks, schemaChecks) },
+    seo: { score: insBlend(seo.score, readChecks.concat(freshChecks, schemaChecks, techSeoChecks), 0.15), checks: seo.checks.concat(readChecks, freshChecks, schemaChecks, techSeoChecks) },
     design: { score: insBlend(cons.overall, conChecks(d).concat(ovfChecks(d)), 0.3), checks: designChecks.concat(conChecks(d), ovfChecks(d)) },
     a11y: { score: insBlend(a11y.score, labChecks(d), 0.25), checks: a11y.checks.concat(labChecks(d)) },
     speed: { score: insBlend(perf ? perf.score : null, imgChecks.concat(fieldChecks(d), perfChecks), 0.4), checks: shSpeedChecks(d).concat(imgChecks, fieldChecks(d), perfChecks) },
     links: { score: null, checks: linkChecks },
     sec: { score: insBlend(null, secChecks, 1), checks: secChecks },
-    ai: { score: llm.score, checks: llm.checks },
+    ai: { score: arAiScore(llm.score, geoChecks, agentChecks), checks: llm.checks.concat(geoChecks, agentChecks) },
     ux: { score: dp.score, checks: dp.checks }
   };
   const cats = SH_CATS.map(def => {
@@ -259,7 +262,7 @@ function shCheckBody(it) {
       ${it.mean ? `<div><h4>What it means</h4><p>${shEsc(it.mean)}</p></div>` : ''}
       ${it.fix ? `<div><h4>What to change</h4><p>${shEsc(it.fix)}</p></div>` : ''}
       ${it.fixCode
-        ? `<div class="fx"><div class="fx-h"><b>${shIcon('check', 12)} Copy-ready fix</b><small>${shEsc(FIX_WHERE[it.fixCode.where] || '')}</small></div><pre class="sh-code fx-code">${shEsc(it.fixCode.code)}</pre>${it.fixCode.note ? `<p class="fx-note">${shEsc(it.fixCode.note)}</p>` : ''}</div>`
+        ? `<div class="fx"><div class="fx-h"><b>${shIcon('check', 12)} Copy-ready fix</b><small>${shEsc(FIX_WHERE[it.fixCode.where] || '')}${it.fixCode.path ? ' · ' + shEsc(it.fixCode.path) : ''}</small></div><pre class="sh-code fx-code">${shEsc(it.fixCode.code)}</pre>${it.fixCode.note ? `<p class="fx-note">${shEsc(it.fixCode.note)}</p>` : ''}</div>`
         : (it.tag ? `<div class="sh-code">${shEsc(it.tag)}</div>` : '')}
       <div class="sh-btns">
         ${it.fixCode ? `<button class="sh-btn pri sm" data-sh="copy" data-v="${shEsc(it.fixCode.code)}">${shIcon('copy', 13)} Copy fix</button>` : ''}
@@ -407,6 +410,7 @@ function shAuditView(A) {
     h += `<div class="sh-chead"><span class="sh-chead-t sh-serif">${c.name}</span><span class="sh-chead-s">${c.blurb}</span></div>`;
   }
 
+  if (c.id === 'ai') h += arCatCard();
   if (c.checks.length) {
     if (c.issues.length) {
       const open = c.issues.filter(i => i.id === SH.openCheck)[0];
@@ -738,7 +742,7 @@ function renderVibeStrip() { }
 function shMenuHtml() {
   const item = (act, icon, label, v) => `<button type="button" role="menuitem" data-sh="${act}"${v ? ` data-v="${v}"` : ''}>${shIcon(icon, 16)}<span>${label}</span></button>`;
   return item('pane', 'book', 'Help & glossary', 'help') + item('pane', 'gear', 'Settings', 'settings') + '<hr>' +
-    item('export', 'file', 'Export page report', 'seo') + item('export', 'palette', 'Export style guide', 'style') + item('export', 'chip', 'Export tech stack (JSON)', 'tech');
+    item('export', 'file', 'Export page report', 'seo') + item('export', 'download', 'Download fix pack (.zip)', 'fixpack') + item('export', 'palette', 'Export style guide', 'style') + item('export', 'chip', 'Export tech stack (JSON)', 'tech');
 }
 function shToggleMenu() {
   SH.menuOpen = !SH.menuOpen;
@@ -754,6 +758,7 @@ function shCloseMenu() {
   const b = shEl('more-btn'); if (b) b.setAttribute('aria-expanded', 'false');
 }
 function shExport(kind) {
+  if (kind === 'fixpack') { avFixPack(); return; }
   const id = kind === 'seo' ? 'export-seo-report-btn' : kind === 'style' ? 'export-style-guide-btn' : 'export-tech-stack-btn';
   const b = shEl(id);
   if (b) b.click();
@@ -872,6 +877,8 @@ function shBuildSettingsPane() {
       ${row('grid', 'Items shown per grid', 'Caps colors, images and links before truncating.', '<input type="number" id="settings-max-items" class="search-input sh-num" min="8" max="200" step="4">')}
     </div>
     ${fieldSettingsHtml()}
+    ${arSettingsHtml()}
+    ${txSettingsHtml()}
     <div class="sh-sec"><span>Saved scans</span></div>
     <div class="sh-card">
       <button class="sh-row" data-sh="ins" data-v="forget-all"><span class="sh-ico">${shIcon('x', 16)}</span><span class="sh-tx"><b>Clear all saved scans</b><small>Removes the history kept for every page.</small></span>${shChev()}</button>
@@ -879,6 +886,7 @@ function shBuildSettingsPane() {
     <div class="sh-sec"><span>Exports</span></div>
     <div class="sh-card">
       ${link('export', 'seo', 'download', 'Export page report', 'Scores, action plan and evidence as an HTML file.')}
+      ${link('export', 'fixpack', 'download', 'Download fix pack', 'Every ready-made fix as a ZIP, filed by where it goes.')}
       ${link('export', 'style', 'palette', 'Export style guide', 'Fonts, colors and spacing for handoff.')}
       ${link('export', 'tech', 'chip', 'Export tech stack', 'Detected technologies as a JSON file.')}
     </div>
@@ -891,6 +899,8 @@ function shBuildSettingsPane() {
 
   shQA('#theme-choice-toggle .tag').forEach(b => b.addEventListener('click', () => shSetTheme(b.dataset.themeChoice)));
   fieldWireSettings();
+  arWireSettings();
+  txWireSettings();
 
   const restore = shEl('settings-restore-session-toggle');
   const assets = shEl('settings-asset-list-toggle');
@@ -966,6 +976,7 @@ function shAfterScan(tabId, url) {
   annOnScan(url, lastExtractedData && lastExtractedData.meta && lastExtractedData.meta.title);
   insOnScan(url);
   conLoad(url);
+  arOnScan(url, tabId);
   if (!changedTab) { finish(); return; }
   const restoreOn = !currentSettings || currentSettings.restoreLastSession !== false;
   const defaults = () => { SH.tab = 'overview'; SH.stack = []; SH.openCheck = null; SH.showPass = false; };
@@ -1035,6 +1046,8 @@ function shHandle(act, v, el) {
     case 'cmp': cmpHandle(v, el); break;
     case 'tp': tpHandle(v, el); break;
     case 'fnt': fntHandle(v, el); break;
+    case 'ar': arHandle(v, el); break;
+    case 'av': avHandle(v, el); break;
     case 'fix': {
       const A = shAudit();
       const cat = A && shCat(A, el.dataset.cat);

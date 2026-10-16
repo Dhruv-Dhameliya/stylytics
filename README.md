@@ -4,7 +4,7 @@
 
 Think of it as a "page X-ray" for designers, developers, SEO people and marketers. Click the icon, and within a second or two you get a dashboard of scores, lists and tools for the current page.
 
-Current version: **2.2**
+Current version: **2.4**
 
 ---
 
@@ -32,7 +32,7 @@ A scrolling rail of categories: **SEO & content**, **Design consistency**, **Acc
 | **Outline** | All headings (H1–H6), counts per level, reading time, and "copy as outline / table of contents". |
 | **Accessibility** | Images missing `alt`, form fields missing labels, heading-order problems, landmarks, missing `lang`. |
 | **Backlinks** | Counts of do-follow / no-follow / internal / external links (click a button to highlight them on the page), plus a shortcut to the **Link checker** (see below). |
-| **Tech Stack** | Detects CMS, frameworks, libraries, analytics, ads, payment tools, chat widgets, cookie banners, CDNs/servers and more. Exports as JSON with name, version, category and an `inferred` flag for each item. |
+| **Tech Stack** | Matches the page against the open-source **Wappalyzer rule set** (about 7,600 technologies), the same fingerprints and matching rules Wappalyzer uses: response headers, cookies, meta tags, script addresses and inline scripts, page variables (`window.…`), DOM selectors, CSS, visible text, requests, `robots.txt` and DNS records. Each match carries a **version** where the rules can read one, a **confidence**, a **category**, what it was found in, a description and a link to the technology's website (click a chip). Implied technologies are added (WordPress implies PHP and MySQL), excluded ones removed, and technologies that only make sense with another (a WordPress plugin) are checked only once it is found. The rules download on first use and refresh weekly. The earlier built-in detector still runs and anything only it finds is kept. Exports as JSON with name, version, category and an `inferred` flag for each item. |
 | **Performance & CWV** | Core Web Vitals (LCP, CLS, FCP, TTFB, INP) with good / needs-work / poor colors, page load stats, and a link to PageSpeed Insights. |
 | **LLM Visibility** | How "friendly" the page is to AI search/answer engines (tables, lists, question-style headings, short answer paragraphs, data, and whether AI crawlers like GPTBot or ClaudeBot are blocked in `robots.txt`). |
 | **Dark Patterns** | Best-effort checks for manipulative design: pre-ticked opt-in boxes, "confirm-shaming" button text, fake urgency/scarcity, hidden unsubscribe links, confusing opt-outs, undisclosed free-trial terms, disguised ads, and lopsided cookie-consent buttons. Hits are "worth a look", not proof. |
@@ -73,7 +73,14 @@ These sit inside the Audit and Tools tabs.
 | **Overflow finder** (Audit › Design, or Tools) | Opens the page in a temporary window at several widths (you choose them) and finds what makes it scroll sideways at each: the element that introduces the overflow, why, and a CSS fix. Points at it on the page. |
 | **Third-party cost** (Audit › Page speed, or Tools) | Names the vendors behind every request (analytics, ads, tag managers, chat, fonts, and about 200 others from a built-in list) and ranks them by weight, requests, time and whether they **block rendering**. A **waterfall** shows every request against first paint and page load, filterable to third-party, blocking or slowest. Sizes that other sites hide can be filled in on request. Adds checks for blocking third-party files, a budget, slow files and missing preconnect, each with the fix. |
 | **Font optimizer** (Audit › Page speed, or Tools) | Joins what the page declares, what it downloads and what its text really uses: fonts loaded but never used, text hidden while a font loads (`font-display`), fonts found late, old formats, total weight, and the layout jump when a web font swaps in, with a **measured fallback font face** (`size-adjust` and ascent/descent overrides) to stop it. Reads Google Fonts and Adobe Fonts stylesheets too and writes the trimmed request. |
+| **Agent readiness** (Audit › AI readiness, or Tools) | Checks whether AI agents can find, read and use the site, with the same 22 checks and level ladder as isitagentready.com, so you do not need to visit it: `robots.txt` AI rules, Content Signals, Link headers, Markdown negotiation, DNS-AID, API catalog, OAuth discovery and protected-resource metadata, `auth.md`, MCP server card, A2A agent card, Agent Skills, WebMCP, ARD, Web Bot Auth and the x402, MPP, UCP, ACP and AP2 commerce protocols. Shows an agent **level 0 to 5** and a 0 to 100 score, what the **next level** needs, and for every check the goal, why it matters, the exact requests made and their answers, and a **copy-ready file, header or snippet** (robots.txt lines, `llms.txt`, JSON manifests, nginx / Apache / Netlify / Vercel / Cloudflare header rules, a Worker for Markdown negotiation) plus a **prompt for a coding agent**. A site-type switch (content site, API and app) decides which checks are scored. A table shows which of 25 AI crawlers robots.txt allows on this page, grouped by search, on-request and training. |
+| **What an AI sees** (Audit › AI readiness, or Tools) | Converts the page to Markdown twice, once as an anonymous crawler downloads it (the raw HTML, no scripts run) and once as your browser built it, then marks every block of text that only exists after scripts run. Gives a plain verdict (“Crawlers see the same text you do” through “Crawlers get an almost empty page”), the word counts on each side, the token cost of the HTML against the Markdown, and a “Missing for AI” list. Copy the Markdown or save it as a `.md` file. |
+| **Fix pack** (⋯ menu, Settings, or Agent readiness) | One ZIP with every ready-made fix in the audit, filed by where it goes: `site/robots.txt` (your live file with the changes merged in, not loose lines), `site/` files such as `sitemap.xml` and `llms.txt`, `server/headers/` in six formats (plain, nginx, Apache, Netlify `_headers`, Vercel, Cloudflare), `server/` Markdown-negotiation code (Worker, Express, nginx), `snippets/` for `<head>`, structured data and body changes, an `AGENT-PROMPT.md` for a coding agent, and a README. Files that describe services a site may not run (MCP card, OAuth, A2A, payments, DNS records) go in `optional/`, so nothing untrue gets published by accident. |
 | **Compare pages** (Tools) | Puts this page next to another (staging against live, before against after, or a competitor): scores, title and description, speed, technology, fonts, colors and which issues are only on one side. Type just a domain to compare the same page on it. Exports an HTML report. |
+
+**AI-search and technical checks.** The AI readiness and SEO audits also read the page the way an anonymous crawler gets it (no cookies, no scripts run) and compare it with what your browser built: whether the text and key tags are in the first HTML response or only appear after JavaScript runs (most AI crawlers do not run it), whether a bot challenge or login wall blocks anonymous visitors, `llms.txt`, `noindex` in the `X-Robots-Tag` header, `nosnippet` and `noai` directives, whether missing pages return a real 404, HTML size, Organization and author markup, `<time>` dates, trust pages, cited sources, a summary near the top, semantic landmarks, descriptive link text, hreflang, canonical protocol, URL hygiene, breadcrumbs and Twitter card tags. The Crawler Access check now follows the full robots.txt standard (wildcards, Allow overrides, this page's path) and separates AI search bots, whose blocking removes you from AI answers, from training crawlers, which you can block without that cost.
+
+**Starts when the page starts.** The network checks begin as soon as the active tab starts to load, without waiting for the page, and finished results for a site are kept for ten minutes. Turn this off in Settings (*Check agent standards automatically*).
 
 **Across time.** Every scan is saved on this device as a compact snapshot (up to 20 per page). The next scan is compared with the previous one: title and description changes, H1 removed, new trackers, new fonts, slower vitals, new issues. It also reports how long a page's content has stood still. Turn it off, or clear it, in Settings.
 
@@ -128,7 +135,7 @@ Screenshots: the panel captures the tab (`chrome.tabs.captureVisibleTab`). For a
 ```
 Stylytic/
 ├── manifest.json          Extension config: permissions, side panel, icons
-├── background.js          Service worker: opens the side panel, cleans saved data when a tab closes
+├── background.js          Service worker: opens the side panel, cleans saved data when a tab closes, registers the WebMCP listener
 ├── stylytics.html         The side panel shell, plus a hidden store of detail panels (each keeps its element IDs)
 ├── stylytics.css          Styles: tokens, squircle corners, shell, and the detail-panel components (light/dark)
 ├── stylytics.js           Scanning, rendering of every detail panel, scoring, tools, exports
@@ -151,6 +158,18 @@ Stylytic/
 ├── overflow-lab.js        Overflow finder: test window, widths, culprits, CSS fixes
 ├── thirdparty.js          Third-party cost: vendor list, ranking, waterfall, audit checks
 ├── fonts-opt.js           Font optimizer: declared against downloaded against used, fixes and fallback metrics
+├── agent-engine.js        Agent readiness scanner: fetching, the robots.txt (RFC 9309) parser, the 22 checks, levels and score
+├── agent-run.js           Runs the scan: per-page state, early start, ten-minute cache, WebMCP and ARD follow-up
+├── agent-geo.js           Raw-HTML (no JavaScript) analysis, AI-search and technical SEO checks, copy-ready fixes and agent prompts
+├── agent-ui.js            Agent readiness screen, the AI audit summary card, scoring blend and its Settings rows
+├── agent-view.js          “What an AI sees” (HTML to Markdown, crawler against browser) and the fix pack ZIP
+├── tech-engine.js         Technology fingerprint matcher (the Wappalyzer rule format): patterns, versions, implies, excludes, requires
+├── tech-worker.js         Web Worker: downloads and caches the rules (IndexedDB, weekly refresh) and runs the matching off the UI thread
+├── tech-scan.js           Collects page, header, robots and DNS data for the matcher, merges it with the built-in detector, status line and Settings
+├── tools/update-tech-db.js   Optional: writes a bundled snapshot of the rules (tech-db/db.json) for first-run offline use
+├── THIRD_PARTY_NOTICES.md Licenses of the third-party rule data
+├── agent-ready.css        Styles for the Agent readiness and “What an AI sees” screens
+├── webmcp-probe.js        Registered by background.js to run in pages: notes the WebMCP tools a page registers
 ├── compare.js             Compare two pages
 ├── report-compare.js      Builds the comparison report
 ├── content_overflow.js    Injected into a temporary test window: measures horizontal overflow
@@ -186,6 +205,9 @@ Stylytic/
 - Saved scans, design tokens, site-scan results, review pins (with their screenshots) and an optional Chrome UX Report key are kept in `chrome.storage.local` on this device. If you add a Chrome UX Report key, the page URL is sent to Google's Chrome UX Report API to fetch real-user data; nothing is sent without a key.
 - Site scan opens the pages you choose in a background tab, one at a time, and closes each one afterwards. Compare pages does the same for the one other page you type in, and the overflow finder opens the current page in a small temporary window.
 - After every scan the extension requests the page once more, plus a few of its heaviest files and the plain `http://` address, to read their response headers for the Security & delivery checks. Only headers are read, and the stylesheets of other sites that declare this page's fonts (such as the Google Fonts CSS) are fetched to read their `@font-face` rules. You can turn both off in Settings (*Read server headers*). *Measure missing sizes* in Third-party cost asks each listed server for its file length when you press it. The Link checker requests each link on the page when you press the button, so the sites you link to see ordinary visits from your browser.
+- - **Technology detection** downloads the open-source Wappalyzer rules from GitHub (`raw.githubusercontent.com/enthec/webappanalyzer`) the first time and then weekly; GitHub sees an ordinary download from your address, and nothing about the pages you visit is sent. Matching happens locally. It also reads the page's response headers and `robots.txt` (reusing what the panel already fetched where it can) and, unless *Look up DNS records* is off, asks Cloudflare's DNS-over-HTTPS service for the site's NS, MX, TXT, SOA and CNAME records. The rules are GPL-3.0 and are not bundled; see `THIRD_PARTY_NOTICES.md`.
+- **What an AI sees** requests the page once more, with no cookies, when you open it, and reads the live page from the tab. Nothing leaves your browser. The **fix pack** is built locally and saved with the browser's download.
+- **Agent readiness** requests well-known files from the site you are viewing (`robots.txt`, `sitemap.xml`, `llms.txt`, `/.well-known/…`, `auth.md`, `openapi.json`, and a made-up address to see whether missing pages return 404) with no cookies, starting as the page begins to load. DNS-AID and ARD record lookups are sent to **Cloudflare's DNS-over-HTTPS service** (falling back to Google's), which means the domain you are viewing is shared with it; turn that off with *Look up DNS records*. *Detect WebMCP tools* registers a small listener that runs in pages you open to note the tools a page registers; it changes nothing on the page and can be turned off.
 - Settings are kept in `chrome.storage.local`; per-tab UI state is kept in `chrome.storage.session`. Per-tab data (picked colors, inspect history) is deleted when the tab is closed.
 
 ---
@@ -196,7 +218,7 @@ Plain JavaScript (no framework, no build tools), HTML5 Canvas for the screenshot
 
 ## Known limits
 
-- Tech-stack detection, dark-pattern checks and the LLM-visibility score are **heuristics** — useful hints, not guarantees.
+- Technology detection follows Wappalyzer's rules and is checked against the official matcher, but it sees what an anonymous request and the loaded page show: HTTP-only cookies, TLS certificate issuers and server-side tools that leave no trace are invisible to it, and the Wappalyzer *probe* checks (three rarely-used rules that request hidden paths) are not run. Pages that block extensions from reading their scripts or styles can hide some matches. Tech-stack detection, dark-pattern checks and the LLM-visibility score are **heuristics** — useful hints, not guarantees.
 - Site scan reads up to 10 pages per run and only pages on the same site. Orphan detection is relative to the pages scanned, so scan more pages for a fuller picture.
 - The Link checker follows redirects but cannot see how many hops there were, checks up to 150 links per run (page content first) and sees pages as a signed-out visitor. Server headers are read from a normal request, so a CDN may send different headers to other visitors; the Content-Security-Policy suggestion is a safe starting point, not a finished policy.
 - Third-party cost uses the browser's resource timing, which keeps only the first 250 requests and hides the size of other sites' files unless they opt in (sizes marked with `~` or `≥` are estimates). Chrome does not always list fonts pulled in by another site's stylesheet, so those are sized from the server instead and are missing from the waterfall. Vendor names come from a built-in list; unknown hosts are shown by domain.
@@ -204,6 +226,7 @@ Plain JavaScript (no framework, no build tools), HTML5 Canvas for the screenshot
 - Copy-ready fixes are drafts: they use the page's own values, but wording (alt text, descriptions) and anything that needs a decision (prices, ratings) must be checked by a person. The Schema check reads JSON-LD only, not microdata or RDFa, and its rules are a simplified version of Google's guidelines.
 - The Overflow finder depends on the browser's minimum window width (very narrow tests may be measured slightly wider and are marked), and sites that redirect small screens to a mobile address are tested on that address.
 - The focus-visibility test reads the page's `:focus` and `:focus-visible` rules; stylesheets from other domains that the browser will not let it read are not included.
+- Agent readiness is judged from this browser, anonymously. A site that answers browsers differently from crawlers (bot challenges, geo rules) can score differently from how a real AI crawler sees it. The standards are young and still changing, so the checks follow what isitagentready.com published when this was written (MCP server cards, ARD and DNS-AID are drafts). WebMCP tools are seen only if the page loaded after the listener was registered, so reload once after installing. The x402 probe looks only at `/`, `/api` and `/api/v1`, and no MCP or A2A endpoint is ever called.
 - Readability formulas are written for English and use simple rules for syllables and passive voice.
 - Some stylesheets from other domains cannot be read by the browser (CORS), so hover colors, CSS variables and matched rules from them may be missing.
 - Very large pages are sampled (for example, a cap of roughly 12,000 elements for some scans) to stay fast.

@@ -222,12 +222,26 @@ function buildSeoAuditReportHtml(data) {
       ['sitemap.xml', sm && sm.present ? `Found (${sm.urlCount} URLs listed)` : (siteFiles ? 'Not found at the standard location' : 'Not checked'), sm && sm.present ? rpStatus('ok', 'Found') : rpStatus('warn', 'Missing')]
     ])}</div>`);
 
-  const nav = [['overview', 'Overview'], ['plan', 'Action plan'], ['categories', 'Results by area'], ['d-search', 'Search appearance'], ['d-social', 'Social sharing'], ['d-structure', 'Content structure'], ['d-links', 'Links and images'], ['d-perf', 'Performance'], ['d-signals', 'Accessibility, UX, AI'], ['d-tech', 'Technology'], ['d-contact', 'Contact and trust'], ['d-files', 'Site files']];
+  /* ---------- agent readiness ---------- */
+  let agentSec = '';
+  if (typeof AR !== 'undefined' && AR.phase === 'done' && typeof arSummary === 'function') {
+    const s = arSummary(data);
+    const rows = AR_DEFS.filter(x => AR.results[x.id]).map(x => {
+      const r = AR.results[x.id];
+      const kind = r.status === 'pass' ? 'ok' : r.status === 'fail' ? 'bad' : r.status === 'unable' ? 'warn' : 'none';
+      return [x.label, rpEsc(r.message), rpStatus(kind, r.status === 'pass' ? 'Pass' : r.status === 'fail' ? 'Missing' : r.status === 'unable' ? 'Unverified' : 'N/A')];
+    });
+    agentSec = rpSection('d-agent', 'Page data', 'Agent readiness', 'Whether AI agents can find, read and use this site: robots.txt AI rules, Content Signals, Link headers, Markdown, API catalog, OAuth, MCP, skills and more. Checked anonymously, with no cookies.',
+      `<div class="card"><div class="stats">${rpStat('Level', s.lv.level + ' / 5')}${rpStat('Stage', rpEsc(s.lv.name))}${rpStat('Score', s.sc.score == null ? '—' : s.sc.score)}${rpStat('Checks passed', s.sc.pass + ' of ' + s.sc.total)}</div></div>
+      <div class="card">${rpKV(rows)}</div>`);
+  }
+
+  const nav = [['overview', 'Overview'], ['plan', 'Action plan'], ['categories', 'Results by area'], ['d-search', 'Search appearance'], ['d-social', 'Social sharing'], ['d-structure', 'Content structure'], ['d-links', 'Links and images'], ['d-perf', 'Performance'], ['d-signals', 'Accessibility, UX, AI']].concat(agentSec ? [['d-agent', 'Agent readiness']] : [], [['d-tech', 'Technology'], ['d-contact', 'Contact and trust'], ['d-files', 'Site files']]);
   const summaryText = `${title}\n${url}\nScore ${A.composite == null ? 'n/a' : A.composite}/100 · ${issues.length} issues (${cnt.High} high, ${cnt.Medium} medium, ${cnt.Low} low)\n` + scored.map(c => `${c.name}: ${c.score == null ? 'n/a' : c.score}`).join(' · ');
   const actions = `<button class="tb-btn" type="button" data-copy="${rpEsc(summaryText)}">${rpIcon('copy', 14)} Copy summary</button>`;
 
   return rpDocument({
     kind: 'Page report', title, host, nav, actions,
-    body: hero + plan + categories + searchSec + socialSec + structureSec + linksSec + perfSec + signalsSec + techSec + contactSec + filesSec
+    body: hero + plan + categories + searchSec + socialSec + structureSec + linksSec + perfSec + signalsSec + agentSec + techSec + contactSec + filesSec
   });
 }

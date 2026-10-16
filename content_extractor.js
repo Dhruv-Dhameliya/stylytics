@@ -2266,7 +2266,76 @@
     }
   } catch (e) { }
 
+  // agent and AI-search signals that only the live page can answer (agent-ready.js judges them)
+  const agentSignals = (() => {
+    const out = {};
+    try {
+      const aiCat = document.querySelector('link[rel~="ai-catalog"][href]');
+      out.aiCatalogHref = aiCat ? aiCat.href : null;
+      out.webmcpForms = Array.from(document.querySelectorAll('form[toolname]')).slice(0, 20).map(f => ({
+        name: f.getAttribute('toolname') || '', description: f.getAttribute('tooldescription') || ''
+      }));
+      out.timeEls = document.querySelectorAll('time[datetime]').length;
+      const count = (sel) => document.querySelectorAll(sel).length;
+      out.landmarks = {
+        main: count('main, [role="main"]'), article: count('article'), nav: count('nav, [role="navigation"]'),
+        header: count('header, [role="banner"]'), footer: count('footer, [role="contentinfo"]')
+      };
+
+      const root = document.querySelector('main, [role="main"], article') || document.body;
+      const GENERIC = /^(click here|here|read more|learn more|more|more info|link|this|this link|details|continue|continue reading|view more|see more)\s*[»>→.…]*$/i;
+      const SOCIAL = /(^|\.)(facebook\.com|twitter\.com|x\.com|linkedin\.com|instagram\.com|youtube\.com|youtu\.be|pinterest\.com|tiktok\.com|whatsapp\.com|wa\.me|t\.me)$/i;
+      const anchors = Array.from(document.querySelectorAll('a[href]')).slice(0, 2500);
+      let generic = 0;
+      const genericSamples = [];
+      const cited = new Map();
+      const trust = { about: false, contact: false, privacy: false, terms: false, author: false };
+      anchors.forEach(a => {
+        let url;
+        try { url = new URL(a.href); } catch (e) { return; }
+        if (!/^https?:$/.test(url.protocol)) return;
+        const text = (a.innerText || a.textContent || '').trim();
+        const labelled = !!(a.getAttribute('aria-label') || a.getAttribute('title'));
+        if (text && !labelled && GENERIC.test(text)) { generic++; if (genericSamples.length < 4) genericSamples.push(text); }
+        const hay = (url.pathname + ' ' + text).toLowerCase();
+        if (/\babout\b|who-we-are|our-story|about-us/.test(hay)) trust.about = true;
+        if (/contact|get-in-touch|reach-us/.test(hay)) trust.contact = true;
+        if (/privacy/.test(hay)) trust.privacy = true;
+        if (/\bterms\b|conditions|\btos\b/.test(hay)) trust.terms = true;
+        if ((/\/(author|authors|team|people|staff)\b/.test(url.pathname.toLowerCase()) || /^by\s/i.test(text)) && url.hostname === location.hostname) trust.author = true;
+        if (url.hostname !== location.hostname && root.contains(a) && !a.closest('nav, header, footer, aside, [role="navigation"]') &&
+          a.closest('p, li, blockquote, td, figcaption') && !SOCIAL.test(url.hostname) && !cited.has(url.hostname)) {
+          cited.set(url.hostname, { href: url.href, host: url.hostname, text: text.slice(0, 80) });
+        }
+      });
+      out.genericLinks = generic;
+      out.genericLinkSamples = genericSamples;
+      out.trust = trust;
+      out.citations = Array.from(cited.values()).slice(0, 12);
+
+      // a short lead paragraph or an explicit summary block near the top
+      const firstH1 = root.querySelector('h1') || document.querySelector('h1');
+      let lead = 0;
+      if (firstH1) {
+        let sib = firstH1.nextElementSibling;
+        for (let i = 0; sib && i < 6; i++, sib = sib.nextElementSibling) {
+          if (sib.tagName === 'P' && (sib.innerText || '').trim().length > 40) { lead = (sib.innerText || '').trim().split(/\s+/).filter(Boolean).length; break; }
+        }
+      }
+      out.leadParagraphWords = lead;
+      out.hasSummaryBlock = !!document.querySelector('[class*="tldr" i], [id*="tldr" i], [class*="key-takeaway" i], [id*="key-takeaway" i], [class*="takeaway" i], [class*="at-a-glance" i]') ||
+        Array.from(headingEls).slice(0, 40).some(h => /^(tl;?dr|key takeaways?|summary|in short|at a glance|quick answer|the short answer|short answer)\b/i.test((h.innerText || '').trim()));
+
+      out.commerce = {
+        cart: count('a[href*="/cart" i], a[href*="/checkout" i], [class*="add-to-cart" i], button[name="add"], form[action*="/cart/add" i], [data-add-to-cart]'),
+        price: Math.min(count('[itemprop="price"], [class*="price" i]'), 50)
+      };
+    } catch (e) { /* the audit treats missing signals as unknown */ }
+    return out;
+  })();
+
   return {
+    agentSignals: agentSignals,
     fonts: Array.from(fonts).slice(0, 15),
     fontStyles: fontStyles,
     fontSizes: sortedSizes.slice(0, 20),

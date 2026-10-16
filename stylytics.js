@@ -145,12 +145,14 @@ document.addEventListener('DOMContentLoaded', () => {
               renderSiteFilesCheck(activeTab.url, data, myGeneration);
               renderCoreWebVitals(data, activeTab.url);
 
+              // the built-in detector answers first; the Wappalyzer rule set (tech-scan.js) refines it when ready
+              txStart(myGeneration, activeTab.id, activeTab.url, data);
               Promise.all([
                 detectBackendTechStack(activeTab.url),
                 scanScriptSignatures(data.scriptUrls)
               ]).then(([backendItems, scriptItems]) => {
                 if (myGeneration !== extractGeneration) return;
-                renderTechStack(data.techStack, [...(backendItems || []), ...(scriptItems || [])]);
+                txOnLegacy(myGeneration, data, [...(backendItems || []), ...(scriptItems || [])]);
               });
               };
               const extracted = !chrome.runtime.lastError && extractResults && extractResults.length && extractResults[0].result;
@@ -440,7 +442,7 @@ const HOWTO_GUIDE = [
       { title: 'Backlinks', desc: 'Every link on the page, classified internal vs. external, with anchor-text quality flags (e.g. generic "click here" text) and an on-demand broken-link checker.' },
       { title: 'Structured Data', desc: 'Detected JSON-LD blocks and their schema types (Article, Product, FAQPage, ...), with parse-error checking.' },
       { title: 'SEO checks', desc: 'A 20-point checklist under Audit › SEO & content. Tap any issue to see what it means, what to change, and a shortcut to the evidence.' },
-      { title: 'LLM Visibility (GEO)', desc: 'Checks how easily AI answer engines (ChatGPT, Perplexity, Google AI Overviews) can parse and cite the page — a separate discipline from classic SEO.' },
+      { title: 'LLM Visibility (GEO)', desc: 'Checks how easily AI answer engines (ChatGPT, Perplexity, Google AI Overviews) can parse and cite the page — a separate discipline from classic SEO. The AI readiness audit also includes Agent readiness: robots.txt AI rules, Content Signals, Link headers, Markdown, llms.txt, MCP, OAuth, Agent Skills, WebMCP and more.' },
       { title: 'Readability', desc: 'Audit › SEO › Readability. Flesch reading ease and grade level, sentence length, passive voice, complex words and paragraph length, worked out from the main text of the page. English only.' },
       { title: 'Schema check', desc: 'Audit › SEO › Schema check. Checks each JSON-LD block (Article, Product, FAQ, Breadcrumb, Organization and more) for missing required properties, malformed dates, prices and addresses, leftover placeholder text and markup that disagrees with the page. It draws a possible search appearance and writes the missing properties for you to paste.' },
       { title: 'Social Preview', desc: 'Mocked Facebook, X/Twitter, and LinkedIn share cards built from the page\'s Open Graph and Twitter Card tags, with warnings if the preview image is missing or undersized.' }
@@ -4491,7 +4493,7 @@ function renderTechStack(frontendItems, backendItems) {
 
   const orderedCategories = [
     ...TECH_CATEGORY_ORDER.filter(c => grouped.has(c)),
-    ...Array.from(grouped.keys()).filter(c => !TECH_CATEGORY_ORDER.includes(c)).sort()
+    ...Array.from(grouped.keys()).filter(c => !TECH_CATEGORY_ORDER.includes(c)).sort(typeof txCatSort === 'function' ? txCatSort : undefined)
   ];
 
   orderedCategories.forEach((category, index) => {
@@ -4511,6 +4513,7 @@ function renderTechStack(frontendItems, backendItems) {
         chip.title = 'Inferred from other detected technology, not directly observed';
       }
       chip.textContent = name;
+      if (typeof txDecorateChip === 'function') txDecorateChip(chip, name);
       tagsEl.appendChild(chip);
     });
     container.appendChild(tagsEl);
@@ -4619,17 +4622,24 @@ function computeLlmVisibilityChecklist(data, siteFilesResult) {
   }
 
   const crawlerAccessChecked = !!siteFilesResult;
-  const blockedAgents = (siteFilesResult && siteFilesResult.robotsTxt && siteFilesResult.robotsTxt.blockedAiCrawlers) || [];
+  const rtx = (siteFilesResult && siteFilesResult.robotsTxt) || {};
+  const blockedAgents = rtx.blockedAiCrawlers || [];
+  // Blocking training crawlers is a legitimate choice and leaves a site visible in AI search. What
+  // fails the check is blocking the bots that build AI answers or fetch a page when a person asks.
+  const blockedSearch = rtx.blockedAiSearch || (rtx.blockedAiSearch === undefined ? blockedAgents : []);
+  const blockedTraining = rtx.blockedAiTraining || [];
 
   const checks = [
     {
       label: 'Crawler Access',
-      pass: blockedAgents.length === 0,
+      pass: blockedSearch.length === 0,
       detail: !crawlerAccessChecked
         ? 'Checking robots.txt for AI crawler restrictions…'
-        : blockedAgents.length
-          ? `Blocked for: ${blockedAgents.join(', ')}.`
-          : 'No AI crawler restrictions found in robots.txt.'
+        : blockedSearch.length
+          ? `${rtx.blocksAllAi ? 'Every AI crawler is blocked' : 'Blocked for'}${rtx.blocksAllAi ? '' : ': ' + blockedSearch.slice(0, 5).join(', ') + (blockedSearch.length > 5 ? ` and ${blockedSearch.length - 5} more` : '')}.`
+          : blockedTraining.length
+            ? `AI search bots are allowed. Training crawlers are blocked (${blockedTraining.join(', ')}), which does not remove the page from AI answers.`
+            : 'No AI crawler restrictions found in robots.txt.'
     },
     {
       label: 'Content Depth',
@@ -4930,8 +4940,25 @@ function parseRobotsGroups(text) {
   return groups;
 }
 
+// Which AI crawlers robots.txt keeps off this path, split by what they do. Uses the full RFC 9309
+// matcher in agent-engine.js: wildcard groups, Allow overrides and path rules all count.
+function classifyAiCrawlers(robotsTxt, path) {
+  const out = { blocked: [], search: [], training: [], all: false };
+  if (!robotsTxt || typeof arParseRobots !== 'function') return out;
+  const parsed = arParseRobots(robotsTxt);
+  const pol = arAiPolicies(parsed, path || '/');
+  pol.forEach(p => {
+    if (p.allowed) return;
+    out.blocked.push(p.id);
+    (p.kind === 'training' ? out.training : out.search).push(p.id);
+  });
+  out.all = pol.length > 0 && pol.every(p => !p.allowed);
+  return out;
+}
+
 function findBlockedAiCrawlers(robotsTxt) {
   if (!robotsTxt) return [];
+  if (typeof arParseRobots === 'function') return classifyAiCrawlers(robotsTxt, '/').blocked;
   const groups = parseRobotsGroups(robotsTxt);
   const blocked = [];
   AI_CRAWLER_AGENTS.forEach(agent => {
@@ -4951,11 +4978,17 @@ async function checkSiteFiles(pageUrl) {
   const robotsRes = await fetchWithTimeout(`${origin}/robots.txt`, 6000);
   if (robotsRes && robotsRes.ok) {
     const text = await robotsRes.text();
+    let pagePath = '/';
+    try { const u = new URL(pageUrl); pagePath = u.pathname + u.search; } catch (e) { /* home */ }
+    const cls = classifyAiCrawlers(text, pagePath);
     result.robotsTxt = {
       present: true,
       size: text.length,
       hasSitemapDirective: /sitemap:/i.test(text),
-      blockedAiCrawlers: findBlockedAiCrawlers(text)
+      blockedAiCrawlers: cls.blocked,
+      blockedAiSearch: cls.search,
+      blockedAiTraining: cls.training,
+      blocksAllAi: cls.all
     };
   }
 

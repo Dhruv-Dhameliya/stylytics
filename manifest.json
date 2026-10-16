@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Stylytics",
-  "version": "2.2",
+  "version": "2.4",
   "description": "Audits any web page's design, SEO, accessibility, and performance — fonts, colors, structured data, and more.",
   "permissions": [
     "activeTab",
